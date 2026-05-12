@@ -36,16 +36,23 @@ type MasterView interface {
 	HasQuorum() bool
 }
 
+// RPCClient is the slice of *transport.Client that the replicator
+// actually uses. Pulled out as an interface so tests can stub it
+// without bringing up a TLS listener.
+type RPCClient interface {
+	Call(ctx context.Context, nodeID, addr, method string, params, out any) error
+}
+
 // Replicator drives mutation routing and broadcast.
 type Replicator struct {
 	selfID  string
 	cluster *config.ClusterConfig
-	client  *transport.Client
+	client  RPCClient
 	master  MasterView
 }
 
 // New constructs a replicator. selfID is this node's NodeID.
-func New(selfID string, cluster *config.ClusterConfig, client *transport.Client, master MasterView) *Replicator {
+func New(selfID string, cluster *config.ClusterConfig, client RPCClient, master MasterView) *Replicator {
 	return &Replicator{
 		selfID:  selfID,
 		cluster: cluster,

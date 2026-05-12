@@ -3,7 +3,6 @@ package transport
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -322,8 +321,3 @@ func peerNodeIDFromConnState(cs tls.ConnectionState) string {
 	}
 	return cs.PeerCertificates[0].Subject.CommonName
 }
-
-// fingerprintOf is a small local mirror to keep this file independent
-// of the crypto package's import path at link time; we recompute the
-// SPKI hash here. Defined in tofu.go.
-var _ = (*x509.Certificate)(nil)

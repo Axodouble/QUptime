@@ -32,7 +32,7 @@ func (d *Dispatcher) OnTransition(check *config.Check, from, to checks.State, sn
 	}
 	msg := Render(d.selfID, check, from, to, snap)
 	for _, alertID := range check.AlertIDs {
-		alert, _ := d.cluster.FindAlert(alertID)
+		alert := d.cluster.FindAlert(alertID)
 		if alert == nil {
 			d.logger.Printf("alerts: check %q references unknown alert %q", check.Name, alertID)
 			continue
@@ -46,7 +46,7 @@ func (d *Dispatcher) OnTransition(check *config.Check, from, to checks.State, sn
 // Test sends a one-shot test message to the named alert. Returns an
 // error so the CLI can surface failures interactively.
 func (d *Dispatcher) Test(alertID string) error {
-	alert, _ := d.cluster.FindAlert(alertID)
+	alert := d.cluster.FindAlert(alertID)
 	if alert == nil {
 		return fmt.Errorf("alert %q not found", alertID)
 	}
