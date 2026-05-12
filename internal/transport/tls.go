@@ -41,19 +41,24 @@ func (a *TLSAssets) tlsCert() (tls.Certificate, error) {
 }
 
 // ServerConfig produces a tls.Config suitable for an inter-node
-// listener. Peers must present a certificate, and that certificate's
-// fingerprint must already be present in the trust store.
+// listener.
+//
+// We accept any client certificate at the TLS layer (no CA verification
+// and no fingerprint pinning here). Trust is enforced one layer up by
+// the RPC dispatcher: untrusted peers may only invoke MethodJoin, which
+// is the protocol's bootstrap step. This avoids the chicken-and-egg
+// where Join itself would need pre-existing symmetric trust to complete
+// the handshake.
 func (a *TLSAssets) ServerConfig() (*tls.Config, error) {
 	cert, err := a.tlsCert()
 	if err != nil {
 		return nil, err
 	}
 	return &tls.Config{
-		Certificates:          []tls.Certificate{cert},
-		MinVersion:            MinTLS,
-		ClientAuth:            tls.RequireAnyClientCert,
-		InsecureSkipVerify:    true, // we do our own pinning via VerifyPeerCertificate
-		VerifyPeerCertificate: a.Trust.VerifyPeerCert,
+		Certificates:       []tls.Certificate{cert},
+		MinVersion:         MinTLS,
+		ClientAuth:         tls.RequireAnyClientCert,
+		InsecureSkipVerify: true, // trust is gated per-method by the RPC dispatcher
 	}, nil
 }
 
