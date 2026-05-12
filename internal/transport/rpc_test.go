@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jasper/quptime/internal/crypto"
-	"github.com/jasper/quptime/internal/trust"
+	"git.cer.sh/axodouble/quptime/internal/crypto"
+	"git.cer.sh/axodouble/quptime/internal/trust"
 )
 
 // testNode bundles everything one side of the handshake needs.

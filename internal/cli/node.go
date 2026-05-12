@@ -11,7 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/jasper/quptime/internal/daemon"
+	"git.cer.sh/axodouble/quptime/internal/daemon"
 )
 
 func addNodeCmd(root *cobra.Command) {

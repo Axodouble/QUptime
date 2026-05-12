@@ -20,8 +20,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/jasper/quptime/internal/config"
-	"github.com/jasper/quptime/internal/crypto"
+	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.cer.sh/axodouble/quptime/internal/crypto"
 )
 
 // Entry is one trusted peer.

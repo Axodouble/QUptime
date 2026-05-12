@@ -5,7 +5,7 @@ import (
 	"encoding/pem"
 	"testing"
 
-	"github.com/jasper/quptime/internal/crypto"
+	"git.cer.sh/axodouble/quptime/internal/crypto"
 )
 
 func TestRoundtripAndLookup(t *testing.T) {

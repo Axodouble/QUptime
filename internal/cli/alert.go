@@ -10,9 +10,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
-	"github.com/jasper/quptime/internal/config"
-	"github.com/jasper/quptime/internal/daemon"
-	"github.com/jasper/quptime/internal/transport"
+	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.cer.sh/axodouble/quptime/internal/daemon"
+	"git.cer.sh/axodouble/quptime/internal/transport"
 )
 
 func addAlertCmd(root *cobra.Command) {

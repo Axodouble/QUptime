@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/jasper/quptime/internal/checks"
-	"github.com/jasper/quptime/internal/config"
+	"git.cer.sh/axodouble/quptime/internal/checks"
+	"git.cer.sh/axodouble/quptime/internal/config"
 )
 
 // Dispatcher fans an aggregator transition out to every alert listed

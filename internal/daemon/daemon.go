@@ -22,14 +22,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jasper/quptime/internal/alerts"
-	"github.com/jasper/quptime/internal/checks"
-	"github.com/jasper/quptime/internal/config"
-	"github.com/jasper/quptime/internal/crypto"
-	"github.com/jasper/quptime/internal/quorum"
-	"github.com/jasper/quptime/internal/replicate"
-	"github.com/jasper/quptime/internal/transport"
-	"github.com/jasper/quptime/internal/trust"
+	"git.cer.sh/axodouble/quptime/internal/alerts"
+	"git.cer.sh/axodouble/quptime/internal/checks"
+	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.cer.sh/axodouble/quptime/internal/crypto"
+	"git.cer.sh/axodouble/quptime/internal/quorum"
+	"git.cer.sh/axodouble/quptime/internal/replicate"
+	"git.cer.sh/axodouble/quptime/internal/transport"
+	"git.cer.sh/axodouble/quptime/internal/trust"
 )
 
 // Daemon is the live process: every long-running component lives here.

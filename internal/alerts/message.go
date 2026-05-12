@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jasper/quptime/internal/checks"
-	"github.com/jasper/quptime/internal/config"
+	"git.cer.sh/axodouble/quptime/internal/checks"
+	"git.cer.sh/axodouble/quptime/internal/config"
 )
 
 // Message is the rendered notification ready to ship across any
