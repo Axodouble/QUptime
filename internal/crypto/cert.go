@@ -65,13 +65,3 @@ func FingerprintFromCertPEM(certPEM []byte) (string, error) {
 	}
 	return Fingerprint(cert), nil
 }
-
-// FingerprintFromPubKeyPEM parses a public-key PEM and returns its
-// fingerprint over the same SPKI bytes.
-func FingerprintFromPubKeyPEM(pubPEM []byte) (string, error) {
-	block, _ := pem.Decode(pubPEM)
-	if block == nil {
-		return "", errors.New("pubkey: no PEM block")
-	}
-	return FingerprintFromSPKI(block.Bytes), nil
-}

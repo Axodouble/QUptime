@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"text/tabwriter"
 	"time"
 
 	"github.com/google/uuid"
@@ -30,30 +31,16 @@ func addAlertCmd(root *cobra.Command) {
 		Use:   "list",
 		Short: "List configured alerts",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
-			defer cancel()
-			raw, err := callDaemon(ctx, daemon.CtrlStatus, nil)
-			if err != nil {
-				return err
-			}
-			var st transport.StatusResponse
-			if err := json.Unmarshal(raw, &st); err != nil {
-				return err
-			}
-			// status response doesn't carry alerts — call mutate with a
-			// "list" by reading cluster.yaml indirectly via status's
-			// version is not enough. Fall back: ask for ClusterConfig
-			// via a dedicated read RPC if needed. For v1 we rely on
-			// node.yaml being co-located: read the local cluster.yaml
-			// directly so the operator gets up-to-date output.
 			cluster, err := config.LoadClusterConfig()
 			if err != nil {
 				return err
 			}
+			tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
+			fmt.Fprintln(tw, "ID\tTYPE\tNAME")
 			for _, a := range cluster.Alerts {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", a.ID, a.Type, a.Name)
+				fmt.Fprintf(tw, "%s\t%s\t%s\n", a.ID, a.Type, a.Name)
 			}
-			return nil
+			return tw.Flush()
 		},
 	}
 

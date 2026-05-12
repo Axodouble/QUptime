@@ -196,8 +196,7 @@ func (c *controlServer) dispatch(ctx context.Context, req CtrlRequest) CtrlRespo
 		if err := json.Unmarshal(req.Body, &body); err != nil {
 			return fail(err)
 		}
-		var payload json.RawMessage = body.Payload
-		ver, err := c.d.replicator.LocalMutate(ctx, body.Kind, json.RawMessage(payload))
+		ver, err := c.d.replicator.LocalMutate(ctx, body.Kind, body.Payload)
 		if err != nil {
 			return fail(err)
 		}

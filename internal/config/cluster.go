@@ -175,43 +175,18 @@ func (c *ClusterConfig) Replace(incoming *ClusterConfig) (bool, error) {
 	return true, nil
 }
 
-// FindCheck returns the check with the given ID or name.
-func (c *ClusterConfig) FindCheck(idOrName string) (*Check, int) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	for i := range c.Checks {
-		if c.Checks[i].ID == idOrName || c.Checks[i].Name == idOrName {
-			cp := c.Checks[i]
-			return &cp, i
-		}
-	}
-	return nil, -1
-}
-
-// FindAlert returns the alert with the given ID or name.
-func (c *ClusterConfig) FindAlert(idOrName string) (*Alert, int) {
+// FindAlert returns the alert with the given ID or name, or nil if
+// no entry matches.
+func (c *ClusterConfig) FindAlert(idOrName string) *Alert {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	for i := range c.Alerts {
 		if c.Alerts[i].ID == idOrName || c.Alerts[i].Name == idOrName {
 			cp := c.Alerts[i]
-			return &cp, i
+			return &cp
 		}
 	}
-	return nil, -1
-}
-
-// FindPeer returns the peer with the given node ID.
-func (c *ClusterConfig) FindPeer(nodeID string) (*PeerInfo, int) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	for i := range c.Peers {
-		if c.Peers[i].NodeID == nodeID {
-			cp := c.Peers[i]
-			return &cp, i
-		}
-	}
-	return nil, -1
+	return nil
 }
 
 // QuorumSize returns the minimum number of live nodes required for

@@ -99,17 +99,6 @@ func (a *Aggregator) Submit(nodeID string, r Result) {
 	a.evaluate(r.CheckID)
 }
 
-// SnapshotAll returns the current aggregate view of every known check.
-func (a *Aggregator) SnapshotAll() map[string]Snapshot {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	out := make(map[string]Snapshot, len(a.perCheck))
-	for id, st := range a.perCheck {
-		out[id] = a.snapshotLocked(id, st)
-	}
-	return out
-}
-
 // SnapshotFor returns the aggregate for a single check.
 func (a *Aggregator) SnapshotFor(checkID string) (Snapshot, bool) {
 	a.mu.Lock()

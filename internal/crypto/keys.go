@@ -88,12 +88,6 @@ func LoadCertPEM() ([]byte, error) {
 	return os.ReadFile(config.CertFilePath())
 }
 
-// LoadPublicKeyPEM reads the public-key PEM (exchanged out of band
-// during invite / join).
-func LoadPublicKeyPEM() ([]byte, error) {
-	return os.ReadFile(config.PublicKeyPath())
-}
-
 func writePEM(path, blockType string, der []byte, perm os.FileMode) error {
 	encoded := pem.EncodeToMemory(&pem.Block{Type: blockType, Bytes: der})
 	return config.AtomicWrite(path, encoded, perm)

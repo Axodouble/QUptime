@@ -30,7 +30,6 @@ func addCheckCmd(root *cobra.Command) {
 		})
 	addHTTP.Flags().Int("expect", 200, "HTTP status code that signals UP")
 	addHTTP.Flags().String("body-match", "", "substring required in response body for UP")
-	bindHTTPFlags(addHTTP)
 
 	addTCP := buildAddCheckCmd(config.CheckTCP, "tcp", "<name> <host:port>",
 		"Add a TCP-connect check",
@@ -168,7 +167,3 @@ func bindCheckFlags(cmd *cobra.Command) {
 	cmd.Flags().String("timeout", "10s", "per-probe timeout")
 	cmd.Flags().String("alerts", "", "comma-separated alert IDs/names to notify on transition")
 }
-
-// bindHTTPFlags is a no-op kept to mirror the per-type flag bind sites
-// so the caller can extend cleanly later.
-func bindHTTPFlags(cmd *cobra.Command) {}

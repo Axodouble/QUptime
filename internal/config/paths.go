@@ -6,7 +6,6 @@
 //	cluster.yaml  — replicated state (peers, checks, alerts, version)
 //	trust.yaml    — local fingerprint trust store
 //	keys/         — RSA private + public keys + self-signed cert
-//	state.json    — runtime cache (last check results, current master)
 //
 // A unix socket for the local CLI lives alongside (defaults to
 // /var/run/quptime/quptime.sock when running as root, otherwise
@@ -25,7 +24,6 @@ const (
 	NodeFile    = "node.yaml"
 	ClusterFile = "cluster.yaml"
 	TrustFile   = "trust.yaml"
-	StateFile   = "state.json"
 	KeysDir     = "keys"
 	PrivateKey  = "private.pem"
 	PublicKey   = "public.pem"
@@ -85,9 +83,6 @@ func ClusterFilePath() string { return filepath.Join(DataDir(), ClusterFile) }
 
 // TrustFilePath returns the absolute path to trust.yaml.
 func TrustFilePath() string { return filepath.Join(DataDir(), TrustFile) }
-
-// StateFilePath returns the absolute path to state.json.
-func StateFilePath() string { return filepath.Join(DataDir(), StateFile) }
 
 // PrivateKeyPath returns the absolute path to the RSA private key.
 func PrivateKeyPath() string { return filepath.Join(DataDir(), KeysDir, PrivateKey) }
