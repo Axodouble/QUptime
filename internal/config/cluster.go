@@ -1,0 +1,227 @@
+package config
+
+import (
+	"fmt"
+	"os"
+	"sync"
+	"time"
+
+	"gopkg.in/yaml.v3"
+)
+
+// PeerInfo identifies a cluster member as known to all peers.
+// (Trust material lives in trust.yaml; this struct stays portable.)
+type PeerInfo struct {
+	NodeID      string `yaml:"node_id"`
+	Advertise   string `yaml:"advertise"`
+	Fingerprint string `yaml:"fingerprint"`
+}
+
+// CheckType enumerates the supported probe kinds.
+type CheckType string
+
+const (
+	CheckHTTP CheckType = "http"
+	CheckTCP  CheckType = "tcp"
+	CheckICMP CheckType = "icmp"
+)
+
+// Check describes a single monitored target.
+type Check struct {
+	ID       string        `yaml:"id"`
+	Name     string        `yaml:"name"`
+	Type     CheckType     `yaml:"type"`
+	Target   string        `yaml:"target"`   // URL, host:port, or host
+	Interval time.Duration `yaml:"interval"` // default 30s
+	Timeout  time.Duration `yaml:"timeout"`  // default 10s
+
+	// HTTP-only options.
+	ExpectStatus int    `yaml:"expect_status,omitempty"`
+	BodyMatch    string `yaml:"body_match,omitempty"`
+
+	// AlertIDs lists which configured alerts fire when this check
+	// transitions state.
+	AlertIDs []string `yaml:"alert_ids,omitempty"`
+}
+
+// AlertType enumerates supported notifier kinds.
+type AlertType string
+
+const (
+	AlertSMTP    AlertType = "smtp"
+	AlertDiscord AlertType = "discord"
+)
+
+// Alert describes a single notifier destination.
+type Alert struct {
+	ID   string    `yaml:"id"`
+	Name string    `yaml:"name"`
+	Type AlertType `yaml:"type"`
+
+	// SMTP options.
+	SMTPHost     string   `yaml:"smtp_host,omitempty"`
+	SMTPPort     int      `yaml:"smtp_port,omitempty"`
+	SMTPUser     string   `yaml:"smtp_user,omitempty"`
+	SMTPPassword string   `yaml:"smtp_password,omitempty"`
+	SMTPFrom     string   `yaml:"smtp_from,omitempty"`
+	SMTPTo       []string `yaml:"smtp_to,omitempty"`
+	SMTPStartTLS bool     `yaml:"smtp_starttls,omitempty"`
+
+	// Discord options.
+	DiscordWebhook string `yaml:"discord_webhook,omitempty"`
+}
+
+// ClusterConfig is the replicated cluster state. The Version field
+// strictly increases on every mutation; the master is the only node
+// that bumps it.
+type ClusterConfig struct {
+	Version   uint64    `yaml:"version"`
+	UpdatedAt time.Time `yaml:"updated_at"`
+	UpdatedBy string    `yaml:"updated_by"`
+
+	Peers  []PeerInfo `yaml:"peers"`
+	Checks []Check    `yaml:"checks"`
+	Alerts []Alert    `yaml:"alerts"`
+
+	mu sync.RWMutex `yaml:"-"`
+}
+
+// LoadClusterConfig reads cluster.yaml. A missing file returns an
+// empty (version 0) config — callers should treat that as the
+// pre-bootstrap state.
+func LoadClusterConfig() (*ClusterConfig, error) {
+	raw, err := os.ReadFile(ClusterFilePath())
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &ClusterConfig{}, nil
+		}
+		return nil, err
+	}
+	cfg := &ClusterConfig{}
+	if err := yaml.Unmarshal(raw, cfg); err != nil {
+		return nil, fmt.Errorf("parse cluster.yaml: %w", err)
+	}
+	return cfg, nil
+}
+
+// Save writes cluster.yaml atomically. Caller is responsible for
+// having already taken any external locks.
+func (c *ClusterConfig) Save() error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out, err := yaml.Marshal(c)
+	if err != nil {
+		return err
+	}
+	return AtomicWrite(ClusterFilePath(), out, 0o600)
+}
+
+// Snapshot returns a deep-enough copy of the config that can be
+// safely serialized while the original continues to mutate.
+func (c *ClusterConfig) Snapshot() *ClusterConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	cp := &ClusterConfig{
+		Version:   c.Version,
+		UpdatedAt: c.UpdatedAt,
+		UpdatedBy: c.UpdatedBy,
+		Peers:     append([]PeerInfo(nil), c.Peers...),
+		Checks:    append([]Check(nil), c.Checks...),
+		Alerts:    append([]Alert(nil), c.Alerts...),
+	}
+	return cp
+}
+
+// Mutate runs fn under the config write lock, bumps Version on
+// success, and writes the file. Only the master should call this.
+func (c *ClusterConfig) Mutate(byNode string, fn func(*ClusterConfig) error) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err := fn(c); err != nil {
+		return err
+	}
+	c.Version++
+	c.UpdatedAt = time.Now().UTC()
+	c.UpdatedBy = byNode
+	out, err := yaml.Marshal(c)
+	if err != nil {
+		return err
+	}
+	return AtomicWrite(ClusterFilePath(), out, 0o600)
+}
+
+// Replace overwrites the local config with an incoming snapshot if
+// that snapshot has a strictly greater version. Returns true if
+// applied.
+func (c *ClusterConfig) Replace(incoming *ClusterConfig) (bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if incoming.Version <= c.Version {
+		return false, nil
+	}
+	c.Version = incoming.Version
+	c.UpdatedAt = incoming.UpdatedAt
+	c.UpdatedBy = incoming.UpdatedBy
+	c.Peers = append([]PeerInfo(nil), incoming.Peers...)
+	c.Checks = append([]Check(nil), incoming.Checks...)
+	c.Alerts = append([]Alert(nil), incoming.Alerts...)
+	out, err := yaml.Marshal(c)
+	if err != nil {
+		return false, err
+	}
+	if err := AtomicWrite(ClusterFilePath(), out, 0o600); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// FindCheck returns the check with the given ID or name.
+func (c *ClusterConfig) FindCheck(idOrName string) (*Check, int) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	for i := range c.Checks {
+		if c.Checks[i].ID == idOrName || c.Checks[i].Name == idOrName {
+			cp := c.Checks[i]
+			return &cp, i
+		}
+	}
+	return nil, -1
+}
+
+// FindAlert returns the alert with the given ID or name.
+func (c *ClusterConfig) FindAlert(idOrName string) (*Alert, int) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	for i := range c.Alerts {
+		if c.Alerts[i].ID == idOrName || c.Alerts[i].Name == idOrName {
+			cp := c.Alerts[i]
+			return &cp, i
+		}
+	}
+	return nil, -1
+}
+
+// FindPeer returns the peer with the given node ID.
+func (c *ClusterConfig) FindPeer(nodeID string) (*PeerInfo, int) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	for i := range c.Peers {
+		if c.Peers[i].NodeID == nodeID {
+			cp := c.Peers[i]
+			return &cp, i
+		}
+	}
+	return nil, -1
+}
+
+// QuorumSize returns the minimum number of live nodes required for
+// the cluster to make progress: floor(N/2) + 1.
+func (c *ClusterConfig) QuorumSize() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	n := len(c.Peers)
+	if n == 0 {
+		return 1
+	}
+	return n/2 + 1
+}
