@@ -5,7 +5,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/jasper/quptime/internal/config"
+	"git.cer.sh/axodouble/quptime/internal/config"
 )
 
 type tcpProber struct{}

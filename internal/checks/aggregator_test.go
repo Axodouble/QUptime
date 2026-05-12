@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jasper/quptime/internal/config"
+	"git.cer.sh/axodouble/quptime/internal/config"
 )
 
 func TestAggregatorHysteresisRequiresConsecutiveEvals(t *testing.T) {

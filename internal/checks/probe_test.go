@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jasper/quptime/internal/config"
+	"git.cer.sh/axodouble/quptime/internal/config"
 )
 
 func TestHTTPProberHappyPath(t *testing.T) {

@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/jasper/quptime/internal/checks"
-	"github.com/jasper/quptime/internal/crypto"
-	"github.com/jasper/quptime/internal/transport"
-	"github.com/jasper/quptime/internal/trust"
+	"git.cer.sh/axodouble/quptime/internal/checks"
+	"git.cer.sh/axodouble/quptime/internal/crypto"
+	"git.cer.sh/axodouble/quptime/internal/transport"
+	"git.cer.sh/axodouble/quptime/internal/trust"
 )
 
 // registerHandlers wires every inter-node RPC method that the daemon

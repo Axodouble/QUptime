@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jasper/quptime/internal/config"
+	"git.cer.sh/axodouble/quptime/internal/config"
 )
 
 // State is the aggregate verdict on one check.

@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jasper/quptime/internal/cli"
+	"git.cer.sh/axodouble/quptime/internal/cli"
 )
 
 func main() {

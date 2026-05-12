@@ -23,8 +23,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jasper/quptime/internal/config"
-	"github.com/jasper/quptime/internal/transport"
+	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.cer.sh/axodouble/quptime/internal/transport"
 )
 
 // MasterView is the minimum the replicator needs from the quorum

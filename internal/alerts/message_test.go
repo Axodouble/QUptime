@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jasper/quptime/internal/checks"
-	"github.com/jasper/quptime/internal/config"
+	"git.cer.sh/axodouble/quptime/internal/checks"
+	"git.cer.sh/axodouble/quptime/internal/config"
 )
 
 func TestRenderDownTransition(t *testing.T) {

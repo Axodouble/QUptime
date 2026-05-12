@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jasper/quptime/internal/config"
+	"git.cer.sh/axodouble/quptime/internal/config"
 )
 
 // ReconcileInterval is how often the scheduler reconciles its set of

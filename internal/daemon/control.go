@@ -12,10 +12,10 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/jasper/quptime/internal/config"
-	"github.com/jasper/quptime/internal/crypto"
-	"github.com/jasper/quptime/internal/transport"
-	"github.com/jasper/quptime/internal/trust"
+	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.cer.sh/axodouble/quptime/internal/crypto"
+	"git.cer.sh/axodouble/quptime/internal/transport"
+	"git.cer.sh/axodouble/quptime/internal/trust"
 )
 
 // controlMaxFrame caps unix-socket request/response frames. Generous

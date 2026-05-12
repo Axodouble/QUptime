@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/jasper/quptime/internal/daemon"
-	"github.com/jasper/quptime/internal/transport"
+	"git.cer.sh/axodouble/quptime/internal/daemon"
+	"git.cer.sh/axodouble/quptime/internal/transport"
 )
 
 func addStatusCmd(root *cobra.Command) {

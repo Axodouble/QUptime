@@ -10,8 +10,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/jasper/quptime/internal/config"
-	"github.com/jasper/quptime/internal/daemon"
+	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.cer.sh/axodouble/quptime/internal/daemon"
 )
 
 // callDaemon sends one control-plane request and decodes the

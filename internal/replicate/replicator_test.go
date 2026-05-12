@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/jasper/quptime/internal/config"
-	"github.com/jasper/quptime/internal/transport"
+	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.cer.sh/axodouble/quptime/internal/transport"
 )
 
 type fakeMaster struct {
