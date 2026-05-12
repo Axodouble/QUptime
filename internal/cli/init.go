@@ -45,6 +45,33 @@ overwritten. Re-run only after wiping the data directory.`,
 			if _, err := crypto.GenerateKeyPair(nodeID); err != nil {
 				return fmt.Errorf("generate keys: %w", err)
 			}
+
+			// Seed cluster.yaml with this node as its own first peer.
+			// Without this the math in `quorum` would treat a one-node
+			// cluster as "0 peers, fallback quorum=1, master=self" —
+			// which works in isolation but breaks the moment another
+			// node joins, because the replicated peers list would lack
+			// the inviter, leading to split-brain elections.
+			certPEM, err := crypto.LoadCertPEM()
+			if err != nil {
+				return fmt.Errorf("load cert: %w", err)
+			}
+			fp, err := crypto.FingerprintFromCertPEM(certPEM)
+			if err != nil {
+				return fmt.Errorf("fingerprint own cert: %w", err)
+			}
+			cluster := &config.ClusterConfig{}
+			if err := cluster.Mutate(nodeID, func(c *config.ClusterConfig) error {
+				c.Peers = []config.PeerInfo{{
+					NodeID:      nodeID,
+					Advertise:   n.AdvertiseAddr(),
+					Fingerprint: fp,
+				}}
+				return nil
+			}); err != nil {
+				return fmt.Errorf("seed cluster.yaml: %w", err)
+			}
+
 			fmt.Fprintf(cmd.OutOrStdout(), "initialised node %s\n", nodeID)
 			fmt.Fprintf(cmd.OutOrStdout(), "data dir: %s\n", config.DataDir())
 			fmt.Fprintf(cmd.OutOrStdout(), "advertise: %s\n", n.AdvertiseAddr())

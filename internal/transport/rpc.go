@@ -107,7 +107,10 @@ func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 	if err := tlsConn.HandshakeContext(ctx); err != nil {
 		return
 	}
-	peerID := peerNodeIDFromConnState(tlsConn.ConnectionState())
+	state := tlsConn.ConnectionState()
+	peerID := peerNodeIDFromConnState(state)
+	peerFP := peerFingerprintFromConnState(state)
+	trusted := s.peerTrusted(peerFP)
 
 	for {
 		body, err := readFrame(tlsConn)
@@ -118,6 +121,14 @@ func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 		if err := json.Unmarshal(body, &req); err != nil {
 			_ = writeError(tlsConn, 0, "decode request: "+err.Error())
 			return
+		}
+
+		// Until the peer is trusted, only the bootstrap call (Join) is
+		// allowed through. Everything else gets a clear error so the
+		// caller knows to re-run `qu node add`.
+		if !trusted && req.Method != MethodJoin {
+			_ = writeError(tlsConn, req.ID, "peer not trusted; run `qu node add` first")
+			continue
 		}
 
 		fn, exists := s.handlers[req.Method]
@@ -134,7 +145,24 @@ func (s *Server) handleConn(ctx context.Context, raw net.Conn) {
 		if err := writeResult(tlsConn, req.ID, result); err != nil {
 			return
 		}
+
+		// A successful Join writes the caller into our trust store;
+		// re-check so subsequent calls on this same connection (or
+		// after reconnect) flow through normally.
+		if req.Method == MethodJoin && !trusted {
+			trusted = s.peerTrusted(peerFP)
+		}
 	}
+}
+
+// peerTrusted reports whether peerFP is in our trust store. Returns
+// false on empty input so a missing/parse-failed cert is never trusted.
+func (s *Server) peerTrusted(peerFP string) bool {
+	if peerFP == "" {
+		return false
+	}
+	_, ok := s.assets.Trust.LookupByFingerprint(peerFP)
+	return ok
 }
 
 // Client opens and pools one mTLS connection per peer node ID. Each
@@ -320,4 +348,14 @@ func peerNodeIDFromConnState(cs tls.ConnectionState) string {
 		return ""
 	}
 	return cs.PeerCertificates[0].Subject.CommonName
+}
+
+// peerFingerprintFromConnState computes the SPKI fingerprint of the
+// peer's leaf cert, matching the format the trust store stores. An
+// empty result means the peer presented no cert.
+func peerFingerprintFromConnState(cs tls.ConnectionState) string {
+	if len(cs.PeerCertificates) == 0 {
+		return ""
+	}
+	return fingerprintOf(cs.PeerCertificates[0])
 }

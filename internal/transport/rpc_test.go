@@ -170,6 +170,73 @@ func TestRPCRejectsUntrustedPeer(t *testing.T) {
 	}
 }
 
+func TestJoinAllowedFromUntrustedPeer(t *testing.T) {
+	// Verifies the bootstrap path: B has not yet been added to A's
+	// trust store. A must still accept the Join RPC; subsequent
+	// non-Join calls on the same connection should succeed once Join
+	// has populated trust.
+	a := makeNode(t, t.TempDir(), "node-a")
+	b := makeNode(t, t.TempDir(), "node-b")
+
+	tmpLn, _ := net.Listen("tcp", "127.0.0.1:0")
+	addr := tmpLn.Addr().String()
+	tmpLn.Close()
+
+	// B must trust A so B's client-side handshake passes.
+	t.Setenv("QUPTIME_DIR", b.dir)
+	_ = b.assets.Trust.Add(trust.Entry{NodeID: a.id, Address: addr, Fingerprint: a.fp})
+
+	srv := NewServer(a.assets)
+	srv.Handle(MethodJoin, func(_ context.Context, _ string, raw json.RawMessage) (any, error) {
+		var req JoinRequest
+		if err := json.Unmarshal(raw, &req); err != nil {
+			return JoinResponse{Error: err.Error()}, nil
+		}
+		// A pretends to accept and records B in its trust store.
+		t.Setenv("QUPTIME_DIR", a.dir)
+		if err := a.assets.Trust.Add(trust.Entry{
+			NodeID: req.NodeID, Address: req.Advertise, Fingerprint: req.Fingerprint,
+		}); err != nil {
+			return JoinResponse{Error: err.Error()}, nil
+		}
+		return JoinResponse{Accepted: true}, nil
+	})
+	srv.Handle(MethodPing, func(_ context.Context, _ string, _ json.RawMessage) (any, error) {
+		return PingResponse{NodeID: a.id, Now: time.Now()}, nil
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go srv.Serve(ctx, addr)
+	defer srv.Stop()
+	if !waitForDial(addr, 2*time.Second) {
+		t.Fatal("server not up")
+	}
+
+	cli := NewClient(b.assets)
+	defer cli.Close()
+
+	// Pre-Join: Ping must be rejected with the "not trusted" error.
+	if err := cli.Call(ctx, a.id, addr, MethodPing, nil, nil); err == nil {
+		t.Error("Ping was allowed without prior trust")
+	}
+
+	// Join must succeed even though B is untrusted.
+	joinReq := JoinRequest{NodeID: b.id, Advertise: addr, Fingerprint: b.fp, CertPEM: string(b.assets.Cert)}
+	var joinResp JoinResponse
+	if err := cli.Call(ctx, a.id, addr, MethodJoin, joinReq, &joinResp); err != nil {
+		t.Fatalf("Join: %v", err)
+	}
+	if !joinResp.Accepted {
+		t.Fatalf("Join not accepted: %s", joinResp.Error)
+	}
+
+	// Post-Join on the SAME pooled connection: Ping should now flow.
+	if err := cli.Call(ctx, a.id, addr, MethodPing, nil, nil); err != nil {
+		t.Errorf("post-Join Ping failed: %v", err)
+	}
+}
+
 // waitForDial polls a TCP listener until it accepts a plain TCP
 // connection, signalling that Serve has begun listening.
 func waitForDial(addr string, max time.Duration) bool {
