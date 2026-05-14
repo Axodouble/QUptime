@@ -52,7 +52,7 @@ and the daemon will replicate the edit cluster-wide.
 
 ## Build
 
-Requires Go 1.23 or newer.
+Requires Go 1.24.2 or newer.
 
 ```sh
 go build -o qu ./cmd/qu
