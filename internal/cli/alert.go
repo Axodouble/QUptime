@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
+	"git.cer.sh/axodouble/quptime/internal/alerts"
 	"git.cer.sh/axodouble/quptime/internal/config"
 	"git.cer.sh/axodouble/quptime/internal/daemon"
 	"git.cer.sh/axodouble/quptime/internal/transport"
@@ -21,9 +22,9 @@ import (
 // variants (if non-empty) and returns the effective subject + body
 // template strings. Inline flags take precedence over file flags.
 func bindTemplateFlags(cmd *cobra.Command) {
-	cmd.Flags().String("subject", "", "subject template (text/template syntax — SMTP only)")
+	cmd.Flags().String("subject", "", "subject template, Go text/template (SMTP only; see --help for variables)")
 	cmd.Flags().String("subject-file", "", "path to a file containing the subject template")
-	cmd.Flags().String("body", "", "body template (text/template syntax)")
+	cmd.Flags().String("body", "", "body template, Go text/template (see --help for variables)")
 	cmd.Flags().String("body-file", "", "path to a file containing the body template")
 }
 
@@ -172,7 +173,9 @@ func buildAlertEditCmd() *cobra.Command {
 take effect; everything else is preserved.
 
 The type (smtp/discord) cannot be changed in place — delete and re-add
-the alert if you need to switch channels.`,
+the alert if you need to switch channels.
+
+` + alerts.TemplateVarsHelp(),
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
@@ -308,6 +311,7 @@ func buildSMTPAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "smtp <name>",
 		Short: "Add an SMTP relay alert",
+		Long:  "Add an SMTP relay alert.\n\n" + alerts.TemplateVarsHelp(),
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
@@ -365,6 +369,7 @@ func buildDiscordAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "discord <name>",
 		Short: "Add a Discord webhook alert",
+		Long:  "Add a Discord webhook alert.\n\n" + alerts.TemplateVarsHelp(),
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)

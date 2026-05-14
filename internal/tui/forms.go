@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/google/uuid"
 
+	"git.cer.sh/axodouble/quptime/internal/alerts"
 	"git.cer.sh/axodouble/quptime/internal/config"
 	"git.cer.sh/axodouble/quptime/internal/daemon"
 	"git.cer.sh/axodouble/quptime/internal/transport"
@@ -272,7 +273,7 @@ func newAddDiscordForm() *form {
 		textField("Name", "human-friendly identifier", true),
 		textField("Webhook URL", "https://discord.com/api/webhooks/...", true),
 		textField("Default", "yes/no — attach to every check automatically", false),
-		textField("Body template", "leave empty for default formatting", false),
+		textField("Body template", alerts.TemplateVarsHint(), false),
 	}
 	return newForm("Add Discord alert", fields, func(vals []string) tea.Cmd {
 		return func() tea.Msg {
@@ -303,8 +304,8 @@ func newAddSMTPForm() *form {
 		textField("To", "comma-separated recipient addresses", true),
 		textField("StartTLS", "yes/no — default yes", false),
 		textField("Default", "yes/no — attach to every check", false),
-		textField("Subject template", "optional", false),
-		textField("Body template", "optional", false),
+		textField("Subject template", alerts.TemplateVarsHint(), false),
+		textField("Body template", alerts.TemplateVarsHint(), false),
 	}
 	return newForm("Add SMTP alert", fields, func(vals []string) tea.Cmd {
 		return func() tea.Msg {
@@ -445,7 +446,7 @@ func newEditDiscordForm(existing config.Alert) *form {
 		textFieldWithValue("Name", "human-friendly identifier", existing.Name, true),
 		textFieldWithValue("Webhook URL", "https://discord.com/api/webhooks/...", existing.DiscordWebhook, true),
 		textFieldWithValue("Default", "yes/no — attach to every check automatically", boolStr(existing.Default), false),
-		textFieldWithValue("Body template", "leave empty for default formatting", existing.BodyTemplate, false),
+		textFieldWithValue("Body template", alerts.TemplateVarsHint(), existing.BodyTemplate, false),
 	}
 	id := existing.ID
 	subject := existing.SubjectTemplate
@@ -483,8 +484,8 @@ func newEditSMTPForm(existing config.Alert) *form {
 		textFieldWithValue("To", "comma-separated recipient addresses", strings.Join(existing.SMTPTo, ","), true),
 		textFieldWithValue("StartTLS", "yes/no — default yes", boolStr(existing.SMTPStartTLS), false),
 		textFieldWithValue("Default", "yes/no — attach to every check", boolStr(existing.Default), false),
-		textFieldWithValue("Subject template", "optional", existing.SubjectTemplate, false),
-		textFieldWithValue("Body template", "optional", existing.BodyTemplate, false),
+		textFieldWithValue("Subject template", alerts.TemplateVarsHint(), existing.SubjectTemplate, false),
+		textFieldWithValue("Body template", alerts.TemplateVarsHint(), existing.BodyTemplate, false),
 	}
 	id := existing.ID
 	return newForm("Edit SMTP alert", fields, func(vals []string) tea.Cmd {
