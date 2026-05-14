@@ -18,9 +18,11 @@ fi
 
 # Check if the user is allowed to write to /usr/local/bin, if so, install qu there, else error out and ask the user to install qu manually
 if [ -w "/usr/local/bin" ]; then
+# Get release tag by $(curl -s https://git.cer.sh/api/v1/repos/axodouble/quptime/releases/latest | jq -r '.tag_name')
+    RELEASE=$(curl -s https://git.cer.sh/api/v1/repos/axodouble/quptime/releases/latest | jq -r '.tag_name')
     # Download the latest release binary from the Git repository and save it to /usr/local/bin/qu
     if command -v curl > /dev/null; then
-        echo_cmd "curl -L -o \"/usr/local/bin/qu\" \"https://git.cer.sh/axodouble/quptime/releases/latest/download/qu-$(curl -s https://git.cer.sh/api/v1/repos/axodouble/quptime/releases/latest | jq -r '.tag_name')-linux-$(uname -m)\""
+        echo_cmd "curl -L -o \"/usr/local/bin/qu\" \"https://git.cer.sh/axodouble/quptime/releases/download/${RELEASE}/qu-${RELEASE}-linux-amd64\""
         echo_cmd "chmod +x \"/usr/local/bin/qu\""
         echo "> qu has been installed to /usr/local/bin/qu"
         exit 0
