@@ -275,6 +275,16 @@ func (r *Replicator) applyLocally(kind transport.MutationKind, payload json.RawM
 			c.Peers = append(c.Peers, p)
 			return nil
 
+		case transport.MutationReplaceConfig:
+			var incoming config.ClusterConfig
+			if err := json.Unmarshal(payload, &incoming); err != nil {
+				return fmt.Errorf("decode replace_config: %w", err)
+			}
+			c.Peers = append([]config.PeerInfo(nil), incoming.Peers...)
+			c.Checks = append([]config.Check(nil), incoming.Checks...)
+			c.Alerts = append([]config.Alert(nil), incoming.Alerts...)
+			return nil
+
 		case transport.MutationRemovePeer:
 			var target string
 			if err := json.Unmarshal(payload, &target); err != nil {

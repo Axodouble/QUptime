@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -69,12 +70,24 @@ func runStatusPrint(ctx context.Context, cmd *cobra.Command, peersOnly bool) err
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "CHECKS")
 	tw2 := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw2, "ID\tNAME\tSTATE\tOK/TOTAL\tDETAIL")
+	fmt.Fprintln(tw2, "ID\tNAME\tSTATE\tOK/TOTAL\tALERTS\tDETAIL")
 	for _, c := range st.Checks {
-		fmt.Fprintf(tw2, "%s\t%s\t%s\t%d/%d\t%s\n",
-			c.CheckID, c.Name, c.State, c.OKCount, c.Total, c.Detail)
+		fmt.Fprintf(tw2, "%s\t%s\t%s\t%d/%d\t%s\t%s\n",
+			c.CheckID, c.Name, c.State, c.OKCount, c.Total,
+			alertsCol(c.Alerts), c.Detail)
 	}
-	return tw2.Flush()
+	if err := tw2.Flush(); err != nil {
+		return err
+	}
+	fmt.Fprintln(out, "(alerts marked * are attached as defaults)")
+	return nil
+}
+
+func alertsCol(names []string) string {
+	if len(names) == 0 {
+		return "-"
+	}
+	return strings.Join(names, ",")
 }
 
 // runStatusPrintChecks renders only the checks block (used by
@@ -90,10 +103,11 @@ func runStatusPrintChecks(ctx context.Context, cmd *cobra.Command) error {
 	}
 	out := cmd.OutOrStdout()
 	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "ID\tNAME\tSTATE\tOK/TOTAL\tDETAIL")
+	fmt.Fprintln(tw, "ID\tNAME\tSTATE\tOK/TOTAL\tALERTS\tDETAIL")
 	for _, c := range st.Checks {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%d/%d\t%s\n",
-			c.CheckID, c.Name, c.State, c.OKCount, c.Total, c.Detail)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%d/%d\t%s\t%s\n",
+			c.CheckID, c.Name, c.State, c.OKCount, c.Total,
+			alertsCol(c.Alerts), c.Detail)
 	}
 	return tw.Flush()
 }

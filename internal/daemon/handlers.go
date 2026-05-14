@@ -169,12 +169,20 @@ func (d *Daemon) buildStatus() transport.StatusResponse {
 		})
 	}
 	for _, c := range snap.Checks {
+		check := c
 		cs := transport.CheckSnapshot{CheckID: c.ID, Name: c.Name, State: "unknown"}
 		if agg, ok := d.aggregator.SnapshotFor(c.ID); ok {
 			cs.State = string(agg.State)
 			cs.OKCount = agg.OKCount
 			cs.Total = agg.Reports
 			cs.Detail = agg.Detail
+		}
+		for _, a := range d.cluster.EffectiveAlertsFor(&check) {
+			label := a.Name
+			if a.Default {
+				label += "*"
+			}
+			cs.Alerts = append(cs.Alerts, label)
 		}
 		out.Checks = append(out.Checks, cs)
 	}

@@ -36,9 +36,9 @@ func addAlertCmd(root *cobra.Command) {
 				return err
 			}
 			tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
-			fmt.Fprintln(tw, "ID\tTYPE\tNAME")
+			fmt.Fprintln(tw, "ID\tTYPE\tDEFAULT\tNAME")
 			for _, a := range cluster.Alerts {
-				fmt.Fprintf(tw, "%s\t%s\t%s\n", a.ID, a.Type, a.Name)
+				fmt.Fprintf(tw, "%s\t%s\t%v\t%s\n", a.ID, a.Type, a.Default, a.Name)
 			}
 			return tw.Flush()
 		},
@@ -80,7 +80,46 @@ func addAlertCmd(root *cobra.Command) {
 		},
 	}
 
-	alert.AddCommand(addParent, listCmd, removeCmd, testCmd)
+	defaultCmd := &cobra.Command{
+		Use:   "default <id-or-name> <on|off>",
+		Short: "Toggle whether an alert is attached to every check by default",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
+			defer cancel()
+			var on bool
+			switch args[1] {
+			case "on", "true", "yes", "1":
+				on = true
+			case "off", "false", "no", "0":
+				on = false
+			default:
+				return fmt.Errorf("second arg must be on/off, got %q", args[1])
+			}
+			cluster, err := config.LoadClusterConfig()
+			if err != nil {
+				return err
+			}
+			existing := cluster.FindAlert(args[0])
+			if existing == nil {
+				return fmt.Errorf("no alert named %q", args[0])
+			}
+			existing.Default = on
+			payload, _ := json.Marshal(existing)
+			body := daemon.MutateBody{Kind: transport.MutationAddAlert, Payload: payload}
+			raw, err := callDaemon(ctx, daemon.CtrlMutate, body)
+			if err != nil {
+				return err
+			}
+			var res daemon.MutateResult
+			_ = json.Unmarshal(raw, &res)
+			fmt.Fprintf(cmd.OutOrStdout(), "alert %s default=%v — cluster version %d\n",
+				existing.Name, on, res.Version)
+			return nil
+		},
+	}
+
+	alert.AddCommand(addParent, listCmd, removeCmd, testCmd, defaultCmd)
 	root.AddCommand(alert)
 }
 
@@ -88,7 +127,7 @@ func buildSMTPAddCmd() *cobra.Command {
 	var host, user, password, from string
 	var port int
 	var to []string
-	var startTLS bool
+	var startTLS, makeDefault bool
 
 	cmd := &cobra.Command{
 		Use:   "smtp <name>",
@@ -101,6 +140,7 @@ func buildSMTPAddCmd() *cobra.Command {
 				ID:           uuid.NewString(),
 				Name:         args[0],
 				Type:         config.AlertSMTP,
+				Default:      makeDefault,
 				SMTPHost:     host,
 				SMTPPort:     port,
 				SMTPUser:     user,
@@ -129,6 +169,7 @@ func buildSMTPAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&from, "from", "", "envelope From address")
 	cmd.Flags().StringSliceVar(&to, "to", nil, "recipient address (repeat or comma-separate)")
 	cmd.Flags().BoolVar(&startTLS, "starttls", true, "negotiate STARTTLS")
+	cmd.Flags().BoolVar(&makeDefault, "default", false, "attach this alert to every check automatically")
 	_ = cmd.MarkFlagRequired("host")
 	_ = cmd.MarkFlagRequired("from")
 	_ = cmd.MarkFlagRequired("to")
@@ -137,6 +178,7 @@ func buildSMTPAddCmd() *cobra.Command {
 
 func buildDiscordAddCmd() *cobra.Command {
 	var webhook string
+	var makeDefault bool
 	cmd := &cobra.Command{
 		Use:   "discord <name>",
 		Short: "Add a Discord webhook alert",
@@ -148,6 +190,7 @@ func buildDiscordAddCmd() *cobra.Command {
 				ID:             uuid.NewString(),
 				Name:           args[0],
 				Type:           config.AlertDiscord,
+				Default:        makeDefault,
 				DiscordWebhook: webhook,
 			}
 			payload, _ := json.Marshal(a)
@@ -164,6 +207,7 @@ func buildDiscordAddCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&webhook, "webhook", "", "discord webhook URL")
+	cmd.Flags().BoolVar(&makeDefault, "default", false, "attach this alert to every check automatically")
 	_ = cmd.MarkFlagRequired("webhook")
 	return cmd
 }

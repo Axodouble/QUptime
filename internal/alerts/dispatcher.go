@@ -31,13 +31,13 @@ func (d *Dispatcher) OnTransition(check *config.Check, from, to checks.State, sn
 		return
 	}
 	msg := Render(d.selfID, check, from, to, snap)
-	for _, alertID := range check.AlertIDs {
-		alert := d.cluster.FindAlert(alertID)
-		if alert == nil {
-			d.logger.Printf("alerts: check %q references unknown alert %q", check.Name, alertID)
-			continue
-		}
-		if err := d.dispatchOne(alert, msg); err != nil {
+	alerts := d.cluster.EffectiveAlertsFor(check)
+	if len(alerts) == 0 && len(check.AlertIDs) > 0 {
+		d.logger.Printf("alerts: check %q references alerts but none resolved", check.Name)
+	}
+	for i := range alerts {
+		alert := alerts[i]
+		if err := d.dispatchOne(&alert, msg); err != nil {
 			d.logger.Printf("alerts: %q via %s: %v", alert.Name, alert.Type, err)
 		}
 	}
