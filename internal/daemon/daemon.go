@@ -195,6 +195,12 @@ func (d *Daemon) Run(ctx context.Context) error {
 		d.scheduler.Start(ctx)
 	}()
 
+	d.wg.Add(1)
+	go func() {
+		defer d.wg.Done()
+		d.watchManualEdits(ctx)
+	}()
+
 	select {
 	case <-ctx.Done():
 	case err := <-servErr:

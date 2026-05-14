@@ -1,6 +1,7 @@
 package config
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"sync"
@@ -49,6 +50,9 @@ type Check struct {
 	// AlertIDs lists which configured alerts fire when this check
 	// transitions state.
 	AlertIDs []string `yaml:"alert_ids,omitempty"`
+
+	// SuppressAlertIDs lets a check opt out of specific default alerts.
+	SuppressAlertIDs []string `yaml:"suppress_alert_ids,omitempty"`
 }
 
 // AlertType enumerates supported notifier kinds.
@@ -64,6 +68,11 @@ type Alert struct {
 	ID   string    `yaml:"id"`
 	Name string    `yaml:"name"`
 	Type AlertType `yaml:"type"`
+
+	// Default attaches this alert to every check automatically, on top
+	// of any explicit AlertIDs the check lists. A check that wants to
+	// opt out of a default alert can list it under SuppressAlertIDs.
+	Default bool `yaml:"default,omitempty"`
 
 	// SMTP options.
 	SMTPHost     string   `yaml:"smtp_host,omitempty"`
@@ -92,6 +101,7 @@ type ClusterConfig struct {
 
 	mu       sync.RWMutex `yaml:"-"`
 	onChange []func()     // fired after any successful Mutate/Replace
+	lastSum  [32]byte     // sha256 of the bytes most recently written
 }
 
 // OnChange registers a callback fired after every successful Mutate
@@ -128,19 +138,43 @@ func LoadClusterConfig() (*ClusterConfig, error) {
 	if err := yaml.Unmarshal(raw, cfg); err != nil {
 		return nil, fmt.Errorf("parse cluster.yaml: %w", err)
 	}
+	cfg.lastSum = sha256.Sum256(raw)
 	return cfg, nil
 }
 
 // Save writes cluster.yaml atomically. Caller is responsible for
 // having already taken any external locks.
 func (c *ClusterConfig) Save() error {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	out, err := yaml.Marshal(c)
 	if err != nil {
 		return err
 	}
-	return AtomicWrite(ClusterFilePath(), out, 0o600)
+	if err := AtomicWrite(ClusterFilePath(), out, 0o600); err != nil {
+		return err
+	}
+	c.lastSum = sha256.Sum256(out)
+	return nil
+}
+
+// LastSavedSum returns the sha256 of the bytes most recently written
+// to disk. The manual-edit watcher uses this to distinguish edits
+// originating from this daemon (where the on-disk hash matches) from
+// edits made externally by the operator.
+func (c *ClusterConfig) LastSavedSum() [32]byte {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.lastSum
+}
+
+// SetLastSavedSum lets the manual-edit watcher record that it has
+// observed (and either applied or rejected) a specific on-disk hash,
+// so the same edit isn't reprocessed on every poll.
+func (c *ClusterConfig) SetLastSavedSum(sum [32]byte) {
+	c.mu.Lock()
+	c.lastSum = sum
+	c.mu.Unlock()
 }
 
 // Snapshot returns a deep-enough copy of the config that can be
@@ -179,6 +213,7 @@ func (c *ClusterConfig) Mutate(byNode string, fn func(*ClusterConfig) error) err
 		c.mu.Unlock()
 		return err
 	}
+	c.lastSum = sha256.Sum256(out)
 	c.mu.Unlock()
 	c.fireOnChange()
 	return nil
@@ -208,9 +243,57 @@ func (c *ClusterConfig) Replace(incoming *ClusterConfig) (bool, error) {
 		c.mu.Unlock()
 		return false, err
 	}
+	c.lastSum = sha256.Sum256(out)
 	c.mu.Unlock()
 	c.fireOnChange()
 	return true, nil
+}
+
+// EffectiveAlertsFor returns the alerts that should fire when a check
+// transitions: every alert explicitly listed in check.AlertIDs, plus
+// every alert flagged Default=true, minus anything the check listed
+// under SuppressAlertIDs. Result is de-duplicated by alert ID.
+func (c *ClusterConfig) EffectiveAlertsFor(check *Check) []Alert {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if check == nil {
+		return nil
+	}
+	suppress := map[string]struct{}{}
+	for _, s := range check.SuppressAlertIDs {
+		suppress[s] = struct{}{}
+	}
+	seen := map[string]struct{}{}
+	var out []Alert
+
+	add := func(a Alert) {
+		if _, dup := seen[a.ID]; dup {
+			return
+		}
+		if _, off := suppress[a.ID]; off {
+			return
+		}
+		if _, off := suppress[a.Name]; off {
+			return
+		}
+		seen[a.ID] = struct{}{}
+		out = append(out, a)
+	}
+
+	for _, want := range check.AlertIDs {
+		for i := range c.Alerts {
+			if c.Alerts[i].ID == want || c.Alerts[i].Name == want {
+				add(c.Alerts[i])
+				break
+			}
+		}
+	}
+	for i := range c.Alerts {
+		if c.Alerts[i].Default {
+			add(c.Alerts[i])
+		}
+	}
+	return out
 }
 
 // FindAlert returns the alert with the given ID or name, or nil if

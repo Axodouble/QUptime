@@ -136,6 +136,13 @@ const (
 	MutationRemoveAlert MutationKind = "remove_alert"
 	MutationAddPeer     MutationKind = "add_peer"
 	MutationRemovePeer  MutationKind = "remove_peer"
+	// MutationReplaceConfig overwrites the editable portions
+	// (peers/checks/alerts) of cluster.yaml in one shot. The replicated
+	// version, updated_at, and updated_by are still set by the master.
+	// Used by the manual-edit watcher: an operator edits cluster.yaml
+	// directly, the daemon detects it, and forwards the parsed snapshot
+	// to the master through this mutation.
+	MutationReplaceConfig MutationKind = "replace_config"
 )
 
 // ProposeMutationRequest is a follower-to-master message. The payload
@@ -199,4 +206,8 @@ type CheckSnapshot struct {
 	OKCount int    `json:"ok_count"`
 	Total   int    `json:"total"`
 	Detail  string `json:"detail,omitempty"`
+	// Alerts holds one display string per effective alert. Names of
+	// default-attached alerts are suffixed with "*" so the operator can
+	// see which fired without lookup.
+	Alerts []string `json:"alerts,omitempty"`
 }
