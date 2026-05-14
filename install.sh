@@ -25,7 +25,6 @@ if [ -w "/usr/local/bin" ]; then
         echo_cmd "curl -L -o \"/usr/local/bin/qu\" \"https://git.cer.sh/axodouble/quptime/releases/download/${RELEASE}/qu-${RELEASE}-linux-amd64\""
         echo_cmd "chmod +x \"/usr/local/bin/qu\""
         echo "> qu has been installed to /usr/local/bin/qu"
-        exit 0
     else
         echo "Error: curl is not installed. Please install curl and try again."
         exit 1
