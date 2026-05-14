@@ -273,6 +273,12 @@ Available template variables:
 | `{{.NodeID}}`           | master that dispatched                     |
 | `{{.When}}`             | RFC3339 timestamp                          |
 
+The same variable list is surfaced in-app: `qu alert add smtp --help`,
+`qu alert add discord --help`, and `qu alert edit --help` each print
+it under their flag table, and `qu tui` shows a compact reminder of
+the supported variables as a hint when the cursor lands on a Subject
+or Body template field in the add/edit alert forms.
+
 `qu alert test <name>` exercises the template against a synthetic
 "homepage going DOWN" transition, so you can verify rendering before
 production traffic depends on it. A template parse or execution error
