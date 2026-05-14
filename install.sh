@@ -20,8 +20,7 @@ fi
 if [ -w "/usr/local/bin" ]; then
     # Download the latest release binary from the Git repository and save it to /usr/local/bin/qu
     if command -v curl > /dev/null; then
-        release_tag=$(curl -s https://git.cer.sh/api/v1/repos/axodouble/quptime/releases/latest | jq -r '.tag_name')
-        echo_cmd "curl -L -o \"/usr/local/bin/qu\" \"https://git.cer.sh/axodouble/quptime/releases/latest/download/qu-$(release_tag)-$(uname -m)\""
+        echo_cmd "curl -L -o \"/usr/local/bin/qu\" \"https://git.cer.sh/axodouble/quptime/releases/latest/download/qu-$(curl -s https://git.cer.sh/api/v1/repos/axodouble/quptime/releases/latest | jq -r '.tag_name')-$(uname -m)\""
         echo_cmd "chmod +x \"/usr/local/bin/qu\""
         echo "> qu has been installed to /usr/local/bin/qu"
         exit 0
