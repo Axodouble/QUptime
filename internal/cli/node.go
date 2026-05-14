@@ -11,7 +11,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"git.cer.sh/axodouble/quptime/internal/config"
 	"git.cer.sh/axodouble/quptime/internal/daemon"
+	"git.cer.sh/axodouble/quptime/internal/transport"
 )
 
 func addNodeCmd(root *cobra.Command) {
@@ -66,7 +68,74 @@ func addNodeCmd(root *cobra.Command) {
 	}
 	node.AddCommand(remove)
 
+	node.AddCommand(buildNodeEditCmd())
+
 	root.AddCommand(node)
+}
+
+// buildNodeEditCmd returns `qu node edit`, which currently only updates
+// the peer's advertise address. The NodeID, fingerprint, and certificate
+// are part of the cluster's trust relationship and cannot be edited —
+// remove and re-add the node (with the new cert) if those need to change.
+func buildNodeEditCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "edit <node-id>",
+		Short: "Update the advertise address (host:port) of an existing peer",
+		Long: `Update fields of an existing peer.
+
+Only the advertise address is editable — the NodeID, fingerprint, and
+certificate are bound by trust and cannot be changed in place. To change
+those, remove the node and add it again (which re-performs TOFU).`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
+			defer cancel()
+
+			if !cmd.Flags().Changed("address") {
+				return fmt.Errorf("--address is required")
+			}
+			newAddr, _ := cmd.Flags().GetString("address")
+			newAddr = strings.TrimSpace(newAddr)
+			if newAddr == "" {
+				return fmt.Errorf("--address cannot be empty")
+			}
+
+			cluster, err := config.LoadClusterConfig()
+			if err != nil {
+				return err
+			}
+			snap := cluster.Snapshot()
+			var existing *config.PeerInfo
+			for i := range snap.Peers {
+				if snap.Peers[i].NodeID == args[0] {
+					cp := snap.Peers[i]
+					existing = &cp
+					break
+				}
+			}
+			if existing == nil {
+				return fmt.Errorf("no peer with node id %q", args[0])
+			}
+			existing.Advertise = newAddr
+
+			payload, err := json.Marshal(existing)
+			if err != nil {
+				return err
+			}
+			body := daemon.MutateBody{Kind: transport.MutationAddPeer, Payload: payload}
+			raw, err := callDaemon(ctx, daemon.CtrlMutate, body)
+			if err != nil {
+				return err
+			}
+			var res daemon.MutateResult
+			_ = json.Unmarshal(raw, &res)
+			fmt.Fprintf(cmd.OutOrStdout(), "updated peer %s -> %s (cluster version now %d)\n",
+				existing.NodeID, existing.Advertise, res.Version)
+			return nil
+		},
+	}
+	cmd.Flags().String("address", "", "new host:port advertise address")
+	return cmd
 }
 
 // runNodeAdd does a two-step TOFU: probe peer, confirm fingerprint

@@ -80,18 +80,38 @@ func newForm(title string, fields []formField, submit func([]string) tea.Cmd) *f
 }
 
 func textField(label, hint string, required bool) formField {
+	return textFieldWithValue(label, hint, "", required)
+}
+
+// textFieldWithValue is the same as textField but pre-populates the
+// input with `value`. Used by edit forms so the user sees the current
+// contents and can tweak instead of retyping everything.
+func textFieldWithValue(label, hint, value string, required bool) formField {
 	ti := textinput.New()
 	ti.Width = 40
 	ti.Placeholder = hint
+	if value != "" {
+		ti.SetValue(value)
+	}
 	return formField{label: label, hint: hint, required: required, input: ti}
 }
 
 func passwordField(label, hint string) formField {
+	return passwordFieldWithValue(label, hint, "")
+}
+
+// passwordFieldWithValue pre-populates the masked input. Mostly useful
+// for edit forms — the user sees that *something* is set (dots) without
+// the actual value leaking on-screen.
+func passwordFieldWithValue(label, hint, value string) formField {
 	ti := textinput.New()
 	ti.Width = 40
 	ti.Placeholder = hint
 	ti.EchoMode = textinput.EchoPassword
 	ti.EchoCharacter = '•'
+	if value != "" {
+		ti.SetValue(value)
+	}
 	return formField{label: label, hint: hint, input: ti}
 }
 
@@ -350,6 +370,183 @@ func newAddNodeForm() *form {
 			}
 		}
 	})
+}
+
+// =============================================================
+// Edit forms — same shape as the add forms above, but the inputs are
+// pre-populated from an existing record and the submit closure reuses
+// the original ID so the daemon's upsert path replaces the entry
+// instead of creating a new one.
+// =============================================================
+
+func newEditCheckForm(existing config.Check) *form {
+	intervalStr := ""
+	if existing.Interval > 0 {
+		intervalStr = existing.Interval.String()
+	}
+	timeoutStr := ""
+	if existing.Timeout > 0 {
+		timeoutStr = existing.Timeout.String()
+	}
+	expectStr := ""
+	if existing.ExpectStatus > 0 {
+		expectStr = fmt.Sprintf("%d", existing.ExpectStatus)
+	}
+
+	fields := []formField{
+		textFieldWithValue("Name", "human-friendly identifier", existing.Name, true),
+		textFieldWithValue("Target", targetHint(existing.Type), existing.Target, true),
+		textFieldWithValue("Interval", "e.g. 30s, 1m", intervalStr, false),
+		textFieldWithValue("Timeout", "e.g. 10s", timeoutStr, false),
+		textFieldWithValue("Alerts", "comma-separated alert IDs/names (optional)", strings.Join(existing.AlertIDs, ","), false),
+	}
+	if existing.Type == config.CheckHTTP {
+		fields = append(fields,
+			textFieldWithValue("Expect status", "e.g. 200 (HTTP only)", expectStr, false),
+			textFieldWithValue("Body match", "substring required (HTTP only)", existing.BodyMatch, false),
+		)
+	}
+	checkType := existing.Type
+	id := existing.ID
+	suppress := append([]string(nil), existing.SuppressAlertIDs...)
+	return newForm("Edit "+strings.ToUpper(string(checkType))+" check", fields, func(vals []string) tea.Cmd {
+		return func() tea.Msg {
+			ch := config.Check{
+				ID:               id,
+				Name:             strings.TrimSpace(vals[0]),
+				Type:             checkType,
+				Target:           strings.TrimSpace(vals[1]),
+				Interval:         parseDurationOr(vals[2], 30*time.Second),
+				Timeout:          parseDurationOr(vals[3], 10*time.Second),
+				SuppressAlertIDs: suppress,
+			}
+			if a := strings.TrimSpace(vals[4]); a != "" {
+				for _, p := range strings.Split(a, ",") {
+					p = strings.TrimSpace(p)
+					if p != "" {
+						ch.AlertIDs = append(ch.AlertIDs, p)
+					}
+				}
+			}
+			if checkType == config.CheckHTTP {
+				ch.ExpectStatus = atoiOr(vals[5], 200)
+				ch.BodyMatch = strings.TrimSpace(vals[6])
+			}
+			if err := mutateAdd(transport.MutationAddCheck, ch); err != nil {
+				return formSubmitErr(err.Error())
+			}
+			return modalDone{flash: "updated check " + ch.Name, level: flashInfo}
+		}
+	})
+}
+
+func newEditDiscordForm(existing config.Alert) *form {
+	fields := []formField{
+		textFieldWithValue("Name", "human-friendly identifier", existing.Name, true),
+		textFieldWithValue("Webhook URL", "https://discord.com/api/webhooks/...", existing.DiscordWebhook, true),
+		textFieldWithValue("Default", "yes/no — attach to every check automatically", boolStr(existing.Default), false),
+		textFieldWithValue("Body template", "leave empty for default formatting", existing.BodyTemplate, false),
+	}
+	id := existing.ID
+	subject := existing.SubjectTemplate
+	return newForm("Edit Discord alert", fields, func(vals []string) tea.Cmd {
+		return func() tea.Msg {
+			a := config.Alert{
+				ID:              id,
+				Name:            strings.TrimSpace(vals[0]),
+				Type:            config.AlertDiscord,
+				DiscordWebhook:  strings.TrimSpace(vals[1]),
+				Default:         parseBool(vals[2]),
+				BodyTemplate:    vals[3],
+				SubjectTemplate: subject,
+			}
+			if err := mutateAdd(transport.MutationAddAlert, a); err != nil {
+				return formSubmitErr(err.Error())
+			}
+			return modalDone{flash: "updated discord alert " + a.Name, level: flashInfo}
+		}
+	})
+}
+
+func newEditSMTPForm(existing config.Alert) *form {
+	portStr := ""
+	if existing.SMTPPort > 0 {
+		portStr = fmt.Sprintf("%d", existing.SMTPPort)
+	}
+	fields := []formField{
+		textFieldWithValue("Name", "human-friendly identifier", existing.Name, true),
+		textFieldWithValue("Host", "smtp.example.com", existing.SMTPHost, true),
+		textFieldWithValue("Port", "default 587", portStr, false),
+		textFieldWithValue("User", "leave empty for anonymous", existing.SMTPUser, false),
+		passwordFieldWithValue("Password", "smtp auth password", existing.SMTPPassword),
+		textFieldWithValue("From", "envelope From address", existing.SMTPFrom, true),
+		textFieldWithValue("To", "comma-separated recipient addresses", strings.Join(existing.SMTPTo, ","), true),
+		textFieldWithValue("StartTLS", "yes/no — default yes", boolStr(existing.SMTPStartTLS), false),
+		textFieldWithValue("Default", "yes/no — attach to every check", boolStr(existing.Default), false),
+		textFieldWithValue("Subject template", "optional", existing.SubjectTemplate, false),
+		textFieldWithValue("Body template", "optional", existing.BodyTemplate, false),
+	}
+	id := existing.ID
+	return newForm("Edit SMTP alert", fields, func(vals []string) tea.Cmd {
+		return func() tea.Msg {
+			to := strings.Split(strings.TrimSpace(vals[6]), ",")
+			for i := range to {
+				to[i] = strings.TrimSpace(to[i])
+			}
+			a := config.Alert{
+				ID:              id,
+				Name:            strings.TrimSpace(vals[0]),
+				Type:            config.AlertSMTP,
+				SMTPHost:        strings.TrimSpace(vals[1]),
+				SMTPPort:        atoiOr(vals[2], 587),
+				SMTPUser:        strings.TrimSpace(vals[3]),
+				SMTPPassword:    vals[4],
+				SMTPFrom:        strings.TrimSpace(vals[5]),
+				SMTPTo:          to,
+				SMTPStartTLS:    parseBoolOr(vals[7], true),
+				Default:         parseBool(vals[8]),
+				SubjectTemplate: vals[9],
+				BodyTemplate:    vals[10],
+			}
+			if err := mutateAdd(transport.MutationAddAlert, a); err != nil {
+				return formSubmitErr(err.Error())
+			}
+			return modalDone{flash: "updated smtp alert " + a.Name, level: flashInfo}
+		}
+	})
+}
+
+// newEditNodeForm only exposes the advertise address. The NodeID and
+// fingerprint/cert are bound by trust and cannot be edited in place;
+// removing and re-adding the node is the path for those changes.
+func newEditNodeForm(existing config.PeerInfo) *form {
+	fields := []formField{
+		textFieldWithValue("Address", "host:9901 — peer's advertise endpoint", existing.Advertise, true),
+	}
+	id := existing.NodeID
+	fp := existing.Fingerprint
+	cert := existing.CertPEM
+	return newForm("Edit node "+shortID(id), fields, func(vals []string) tea.Cmd {
+		return func() tea.Msg {
+			p := config.PeerInfo{
+				NodeID:      id,
+				Advertise:   strings.TrimSpace(vals[0]),
+				Fingerprint: fp,
+				CertPEM:     cert,
+			}
+			if err := mutateAdd(transport.MutationAddPeer, p); err != nil {
+				return formSubmitErr(err.Error())
+			}
+			return modalDone{flash: "updated node " + shortID(id), level: flashInfo}
+		}
+	})
+}
+
+func boolStr(b bool) string {
+	if b {
+		return "yes"
+	}
+	return "no"
 }
 
 // =============================================================

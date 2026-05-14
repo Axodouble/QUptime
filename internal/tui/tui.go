@@ -46,10 +46,13 @@ type model struct {
 	statusLoaded bool
 	statusErr    string
 
-	// Cached alerts come from cluster.yaml directly (the daemon status
-	// only ships per-check effective alert names). We need full Alert
-	// records to render the alerts tab and to support default-toggle.
-	alerts []config.Alert
+	// Full records cached from cluster.yaml directly (the daemon status
+	// only ships per-check effective alert names and per-peer liveness).
+	// We need the full records to render the alerts tab, to support the
+	// default-toggle, and to pre-fill edit forms with current values.
+	peersFull  []config.PeerInfo
+	checksFull []config.Check
+	alerts     []config.Alert
 
 	active tabIndex
 	peers  *peersTab
@@ -76,7 +79,7 @@ func initialModel() model {
 // =============================================================
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(loadStatusCmd(), loadAlertsCmd(), tickCmd())
+	return tea.Batch(loadStatusCmd(), loadConfigCmd(), tickCmd())
 }
 
 type tickMsg time.Time
@@ -86,7 +89,9 @@ type statusMsg struct {
 	err error
 }
 
-type alertsMsg struct {
+type configMsg struct {
+	peers  []config.PeerInfo
+	checks []config.Check
 	alerts []config.Alert
 	err    error
 }
@@ -111,14 +116,14 @@ func loadStatusCmd() tea.Cmd {
 	}
 }
 
-func loadAlertsCmd() tea.Cmd {
+func loadConfigCmd() tea.Cmd {
 	return func() tea.Msg {
 		cfg, err := config.LoadClusterConfig()
 		if err != nil {
-			return alertsMsg{err: err}
+			return configMsg{err: err}
 		}
 		snap := cfg.Snapshot()
-		return alertsMsg{alerts: snap.Alerts}
+		return configMsg{peers: snap.Peers, checks: snap.Checks, alerts: snap.Alerts}
 	}
 }
 
@@ -130,7 +135,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
-		return m, tea.Batch(loadStatusCmd(), loadAlertsCmd(), tickCmd())
+		return m, tea.Batch(loadStatusCmd(), loadConfigCmd(), tickCmd())
 
 	case statusMsg:
 		if msg.err != nil {
@@ -150,8 +155,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case alertsMsg:
+	case configMsg:
 		if msg.err == nil {
+			m.peersFull = msg.peers
+			m.checksFull = msg.checks
 			m.alerts = msg.alerts
 			m.alertsT.Refresh(toAlertRows(msg.alerts))
 		}
@@ -163,7 +170,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setFlash(msg.flash, msg.level)
 		}
 		// Force-refresh in case the modal mutated cluster state.
-		return m, tea.Batch(loadStatusCmd(), loadAlertsCmd())
+		return m, tea.Batch(loadStatusCmd(), loadConfigCmd())
 	}
 
 	// Modal grabs all input while open.
@@ -213,12 +220,14 @@ func (m model) handleKey(km tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "r":
 		m.setFlash("refreshing…", flashInfo)
-		return m, tea.Batch(loadStatusCmd(), loadAlertsCmd())
+		return m, tea.Batch(loadStatusCmd(), loadConfigCmd())
 	case "a":
 		m.modal = m.openAddPicker()
 		return m, nil
 	case "d":
 		return m.openRemoveConfirm()
+	case "e":
+		return m.openEditForm()
 	case "t":
 		if m.active == tabAlerts {
 			return m.testSelectedAlert()
@@ -390,11 +399,11 @@ func (m model) renderHelp() string {
 	specific := ""
 	switch m.active {
 	case tabPeers:
-		specific = "a add node   d remove node"
+		specific = "a add  e edit  d remove"
 	case tabChecks:
-		specific = "a add check  d remove check"
+		specific = "a add  e edit  d remove"
 	case tabAlerts:
-		specific = "a add alert  d remove alert  t test  D toggle default"
+		specific = "a add  e edit  d remove  t test  D toggle default"
 	}
 	return helpStyle.Render(fmt.Sprintf("↑↓ navigate   ⇥ next tab   1/2/3 jump   r refresh   %s   q quit", specific))
 }
@@ -492,6 +501,69 @@ func (m model) openRemoveConfirm() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.modal = newConfirm(prompt, run)
+	return m, nil
+}
+
+// openEditForm dispatches to the right pre-filled edit form based on the
+// active tab and the row under the cursor. Looks up the full record in
+// m.peersFull / m.checksFull / m.alerts (populated by loadConfigCmd) so
+// the form starts with the entry's current values rather than blanks.
+func (m model) openEditForm() (tea.Model, tea.Cmd) {
+	switch m.active {
+	case tabPeers:
+		id := strings.TrimPrefix(m.peers.Selected(), "* ")
+		if id == "" {
+			m.setFlash("no peer selected", flashWarn)
+			return m, nil
+		}
+		for i := range m.peersFull {
+			if m.peersFull[i].NodeID == id {
+				m.modal = newEditNodeForm(m.peersFull[i])
+				return m, nil
+			}
+		}
+		m.setFlash("peer not found in local cluster.yaml", flashError)
+		return m, nil
+
+	case tabChecks:
+		id := m.checks.Selected()
+		if id == "" {
+			m.setFlash("no check selected", flashWarn)
+			return m, nil
+		}
+		for i := range m.checksFull {
+			if m.checksFull[i].ID == id {
+				m.modal = newEditCheckForm(m.checksFull[i])
+				return m, nil
+			}
+		}
+		m.setFlash("check not found in local cluster.yaml", flashError)
+		return m, nil
+
+	case tabAlerts:
+		id := m.alertsT.Selected()
+		if id == "" {
+			m.setFlash("no alert selected", flashWarn)
+			return m, nil
+		}
+		for i := range m.alerts {
+			if m.alerts[i].ID != id {
+				continue
+			}
+			switch m.alerts[i].Type {
+			case config.AlertDiscord:
+				m.modal = newEditDiscordForm(m.alerts[i])
+			case config.AlertSMTP:
+				m.modal = newEditSMTPForm(m.alerts[i])
+			default:
+				m.setFlash("unsupported alert type", flashError)
+				return m, nil
+			}
+			return m, nil
+		}
+		m.setFlash("alert not found in local cluster.yaml", flashError)
+		return m, nil
+	}
 	return m, nil
 }
 
