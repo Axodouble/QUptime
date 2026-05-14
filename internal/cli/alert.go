@@ -155,8 +155,148 @@ func addAlertCmd(root *cobra.Command) {
 		},
 	}
 
-	alert.AddCommand(addParent, listCmd, removeCmd, testCmd, defaultCmd)
+	alert.AddCommand(addParent, listCmd, removeCmd, testCmd, defaultCmd, buildAlertEditCmd())
 	root.AddCommand(alert)
+}
+
+// buildAlertEditCmd returns `qu alert edit`, which updates fields of an
+// existing alert. Only flags actually passed take effect. The alert's
+// type cannot be changed (would require re-validating type-specific
+// fields end-to-end); delete and re-add instead if you need to switch
+// from SMTP to Discord or vice versa.
+func buildAlertEditCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "edit <id-or-name>",
+		Short: "Update fields of an existing alert channel",
+		Long: `Update one or more fields of an existing alert. Only flags you pass
+take effect; everything else is preserved.
+
+The type (smtp/discord) cannot be changed in place — delete and re-add
+the alert if you need to switch channels.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
+			defer cancel()
+
+			cluster, err := config.LoadClusterConfig()
+			if err != nil {
+				return err
+			}
+			existing := cluster.FindAlert(args[0])
+			if existing == nil {
+				return fmt.Errorf("no alert named %q", args[0])
+			}
+
+			f := cmd.Flags()
+			if f.Changed("name") {
+				v, _ := f.GetString("name")
+				existing.Name = v
+			}
+			if f.Changed("default") {
+				v, _ := f.GetBool("default")
+				existing.Default = v
+			}
+			// Templates: inline flag wins over file flag. Either changing
+			// applies; passing an empty inline string clears the template.
+			if f.Changed("subject") {
+				v, _ := f.GetString("subject")
+				existing.SubjectTemplate = v
+			} else if f.Changed("subject-file") {
+				p, _ := f.GetString("subject-file")
+				if p != "" {
+					raw, e := os.ReadFile(p)
+					if e != nil {
+						return fmt.Errorf("read --subject-file %s: %w", p, e)
+					}
+					existing.SubjectTemplate = string(raw)
+				}
+			}
+			if f.Changed("body") {
+				v, _ := f.GetString("body")
+				existing.BodyTemplate = v
+			} else if f.Changed("body-file") {
+				p, _ := f.GetString("body-file")
+				if p != "" {
+					raw, e := os.ReadFile(p)
+					if e != nil {
+						return fmt.Errorf("read --body-file %s: %w", p, e)
+					}
+					existing.BodyTemplate = string(raw)
+				}
+			}
+
+			switch existing.Type {
+			case config.AlertSMTP:
+				if f.Changed("webhook") {
+					return fmt.Errorf("--webhook only applies to Discord alerts")
+				}
+				if f.Changed("host") {
+					v, _ := f.GetString("host")
+					existing.SMTPHost = v
+				}
+				if f.Changed("port") {
+					v, _ := f.GetInt("port")
+					existing.SMTPPort = v
+				}
+				if f.Changed("user") {
+					v, _ := f.GetString("user")
+					existing.SMTPUser = v
+				}
+				if f.Changed("password") {
+					v, _ := f.GetString("password")
+					existing.SMTPPassword = v
+				}
+				if f.Changed("from") {
+					v, _ := f.GetString("from")
+					existing.SMTPFrom = v
+				}
+				if f.Changed("to") {
+					v, _ := f.GetStringSlice("to")
+					existing.SMTPTo = v
+				}
+				if f.Changed("starttls") {
+					v, _ := f.GetBool("starttls")
+					existing.SMTPStartTLS = v
+				}
+			case config.AlertDiscord:
+				for _, smtpFlag := range []string{"host", "port", "user", "password", "from", "to", "starttls"} {
+					if f.Changed(smtpFlag) {
+						return fmt.Errorf("--%s only applies to SMTP alerts", smtpFlag)
+					}
+				}
+				if f.Changed("webhook") {
+					v, _ := f.GetString("webhook")
+					existing.DiscordWebhook = v
+				}
+			}
+
+			payload, err := json.Marshal(existing)
+			if err != nil {
+				return err
+			}
+			body := daemon.MutateBody{Kind: transport.MutationAddAlert, Payload: payload}
+			raw, err := callDaemon(ctx, daemon.CtrlMutate, body)
+			if err != nil {
+				return err
+			}
+			var res daemon.MutateResult
+			_ = json.Unmarshal(raw, &res)
+			fmt.Fprintf(cmd.OutOrStdout(), "updated alert %s (cluster version now %d)\n", existing.Name, res.Version)
+			return nil
+		},
+	}
+	cmd.Flags().String("name", "", "rename the alert")
+	cmd.Flags().Bool("default", false, "attach to every check automatically")
+	cmd.Flags().String("host", "", "SMTP server host (SMTP only)")
+	cmd.Flags().Int("port", 587, "SMTP server port (SMTP only)")
+	cmd.Flags().String("user", "", "SMTP auth user (SMTP only)")
+	cmd.Flags().String("password", "", "SMTP auth password (SMTP only)")
+	cmd.Flags().String("from", "", "envelope From address (SMTP only)")
+	cmd.Flags().StringSlice("to", nil, "recipient address, repeatable (SMTP only)")
+	cmd.Flags().Bool("starttls", true, "negotiate STARTTLS (SMTP only)")
+	cmd.Flags().String("webhook", "", "Discord webhook URL (Discord only)")
+	bindTemplateFlags(cmd)
+	return cmd
 }
 
 func buildSMTPAddCmd() *cobra.Command {

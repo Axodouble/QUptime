@@ -84,8 +84,118 @@ func addCheckCmd(root *cobra.Command) {
 		},
 	}
 
-	check.AddCommand(addParent, listCmd, removeCmd)
+	check.AddCommand(addParent, listCmd, removeCmd, buildCheckEditCmd())
 	root.AddCommand(check)
+}
+
+// buildCheckEditCmd returns `qu check edit`, which updates fields of an
+// existing check in place. Only flags that the operator actually passes
+// modify the corresponding field — everything else is preserved from the
+// existing record, including the ID. Identity match is by ID or Name.
+func buildCheckEditCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "edit <id-or-name>",
+		Short: "Update fields of an existing check",
+		Long: `Update one or more fields of an existing check.
+
+Identifies the target by ID or Name. Only flags you pass take effect;
+all other fields are preserved from the existing record. HTTP-only flags
+(--expect, --body-match) error out on non-HTTP checks.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
+			defer cancel()
+
+			cluster, err := config.LoadClusterConfig()
+			if err != nil {
+				return err
+			}
+			snap := cluster.Snapshot()
+			var existing *config.Check
+			for i := range snap.Checks {
+				if snap.Checks[i].ID == args[0] || snap.Checks[i].Name == args[0] {
+					cp := snap.Checks[i]
+					existing = &cp
+					break
+				}
+			}
+			if existing == nil {
+				return fmt.Errorf("no check named %q", args[0])
+			}
+
+			f := cmd.Flags()
+			if f.Changed("name") {
+				v, _ := f.GetString("name")
+				existing.Name = strings.TrimSpace(v)
+			}
+			if f.Changed("target") {
+				v, _ := f.GetString("target")
+				existing.Target = strings.TrimSpace(v)
+			}
+			if f.Changed("interval") {
+				s, _ := f.GetString("interval")
+				d, err := time.ParseDuration(s)
+				if err != nil {
+					return fmt.Errorf("--interval: %w", err)
+				}
+				existing.Interval = d
+			}
+			if f.Changed("timeout") {
+				s, _ := f.GetString("timeout")
+				d, err := time.ParseDuration(s)
+				if err != nil {
+					return fmt.Errorf("--timeout: %w", err)
+				}
+				existing.Timeout = d
+			}
+			if f.Changed("alerts") {
+				csv, _ := f.GetString("alerts")
+				existing.AlertIDs = nil
+				for _, p := range strings.Split(csv, ",") {
+					p = strings.TrimSpace(p)
+					if p != "" {
+						existing.AlertIDs = append(existing.AlertIDs, p)
+					}
+				}
+			}
+			if f.Changed("expect") {
+				if existing.Type != config.CheckHTTP {
+					return fmt.Errorf("--expect only applies to HTTP checks (this is %s)", existing.Type)
+				}
+				v, _ := f.GetInt("expect")
+				existing.ExpectStatus = v
+			}
+			if f.Changed("body-match") {
+				if existing.Type != config.CheckHTTP {
+					return fmt.Errorf("--body-match only applies to HTTP checks (this is %s)", existing.Type)
+				}
+				v, _ := f.GetString("body-match")
+				existing.BodyMatch = v
+			}
+
+			payload, err := json.Marshal(existing)
+			if err != nil {
+				return err
+			}
+			body := daemon.MutateBody{Kind: transport.MutationAddCheck, Payload: payload}
+			raw, err := callDaemon(ctx, daemon.CtrlMutate, body)
+			if err != nil {
+				return err
+			}
+			var res daemon.MutateResult
+			_ = json.Unmarshal(raw, &res)
+			fmt.Fprintf(cmd.OutOrStdout(), "updated check %s (cluster version now %d)\n", existing.Name, res.Version)
+			return nil
+		},
+	}
+	cmd.Flags().String("name", "", "rename the check")
+	cmd.Flags().String("target", "", "new probe target (URL, host:port, or host)")
+	cmd.Flags().String("interval", "", "new probe interval (e.g. 30s, 1m)")
+	cmd.Flags().String("timeout", "", "new per-probe timeout (e.g. 10s)")
+	cmd.Flags().String("alerts", "", "replace alert list with this CSV of IDs/names (pass empty to clear)")
+	cmd.Flags().Int("expect", 0, "expected HTTP status code (HTTP only)")
+	cmd.Flags().String("body-match", "", "substring required in body (HTTP only)")
+	return cmd
 }
 
 // buildAddCheckCmd produces the per-type "qu check add <type>" subcommand.
