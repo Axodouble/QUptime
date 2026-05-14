@@ -1,24 +1,50 @@
 #!/bin/bash
 
-# Check if ~/.local/bin exists, if not, create it
-if [ ! -d "$HOME/.local/bin" ]; then
-    mkdir -p "$HOME/.local/bin"
-fi
+# Helper function which echo's all commands before executing them in grayscale prefixed with >
+echo_cmd() {
+    echo -e "\033[90m> $1\033[0m"
+    eval "$1"
+}
 
-# Check if ~/.local/bin is in the PATH, if not, give the user a command to add it
-if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-    echo "Please add the following line to your shell configuration file (e.g., ~/.bashrc, ~/.zshrc) to include ~/.local/bin in your PATH:"
-    echo 'export PATH="$HOME/.local/bin:$PATH"'
-    echo "After adding the line, please restart your terminal or run 'source ~/.bashrc' (or the appropriate command for your shell) to apply the changes."
-fi
-
-# Download the binary from git.cer.sh/axodouble/quptime
-# Check whether curl or wget is available
-if command -v curl > /dev/null; then
-    curl -L -o "$HOME/.local/bin/quptime" "https://git.cer.sh/axodouble/quptime/-/raw/main/quptime"
-elif command -v wget > /dev/null; then
-    wget -O "$HOME/.local/bin/quptime" "https://git.cer.sh/axodouble/quptime/-/raw/main/quptime"
+# Check if the user is allowed to write to /usr/local/bin, if so, install qu there, else error out and ask the user to install qu manually
+if [ -w "/usr/local/bin" ]; then
+    # Download the latest release binary from the Git repository and save it to /usr/local/bin/qu
+    if command -v curl > /dev/null; then
+        release_tag=$(curl -s https://git.cer.sh/api/v1/repos/axodouble/quptime/releases/latest | jq -r '.tag_name')
+        echo_cmd "curl -L -o \"/usr/local/bin/qu\" \"https://git.cer.sh/axodouble/quptime/releases/latest/download/qu-$(release_tag)-$(uname -m)\""
+        echo_cmd "chmod +x \"/usr/local/bin/qu\""
+        echo "> qu has been installed to /usr/local/bin/qu"
+        exit 0
+    else
+        echo "Error: curl is not installed. Please install curl and try again."
+        exit 1
+    fi
 else
-    echo "Error: Neither curl nor wget is installed. Please install one of these tools to download the quptime binary."
+    echo "Error: You are not allowed to write to /usr/local/bin. Please install qu manually, or run this script with sudo."
     exit 1
 fi
+
+# Check if the user has systemd, if so create a systemd service file for qu serve
+if command -v systemctl > /dev/null; then
+    echo "> Creating systemd service file for qu serve..."
+    cat <<EOL > /etc/systemd/system/qu-serve.service
+[Unit]
+Description=QUptime Serve
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/qu serve
+Restart=always
+User=$(whoami)
+
+[Install]
+WantedBy=multi-user.target
+EOL
+    echo_cmd "systemctl daemon-reload"
+    echo_cmd "systemctl enable qu-serve.service"
+    echo "> qu serve service has been created and enabled. You can start it with 'systemctl start qu-serve.service'"
+else
+    echo "> Warning: systemd is not available on this system. qu serve will not be automatically started on boot. You can start it manually with '/usr/local/bin/qu serve'"
+fi
+
+echo "Installation complete, before starting `qu serve`, make sure to run `qu init` and read the documentation."

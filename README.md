@@ -10,6 +10,16 @@ A single static binary contains the daemon, the CLI, and everything in
 between. Inter-node traffic is mutual TLS with SSH-style fingerprint
 trust — no central CA, no shared secret.
 
+## Installation
+
+### From pre-built binary
+
+This can be done in one step, either by downloading the latest release from
+the [Gitea releases page](https://git.cer.sh/axodouble/quptime/releases) or by running the following script:
+```sh
+curl -fsSL https://git.cer.sh/Axodouble/QUptime/raw/branch/master/install.sh | sudo bash
+```
+
 ## Why
 
 Most uptime monitors are either a SaaS or a single box that, by
@@ -210,17 +220,17 @@ every two seconds.
 
 Keybindings:
 
-| Key | Action |
-|---|---|
-| `↑` / `↓` | move cursor within a tab |
-| `Tab` / `Shift+Tab` | next / previous tab |
-| `1` / `2` / `3` | jump to Peers / Checks / Alerts |
-| `r` | force-refresh |
-| `a` | add (opens a picker on Checks/Alerts; node form on Peers) |
-| `d` | remove the selected row (confirmation prompt) |
-| `t` | send a test message to the selected alert |
-| `D` | toggle the selected alert's `default` flag |
-| `q` / `Ctrl+C` | quit |
+| Key                 | Action                                                    |
+| ------------------- | --------------------------------------------------------- |
+| `↑` / `↓`           | move cursor within a tab                                  |
+| `Tab` / `Shift+Tab` | next / previous tab                                       |
+| `1` / `2` / `3`     | jump to Peers / Checks / Alerts                           |
+| `r`                 | force-refresh                                             |
+| `a`                 | add (opens a picker on Checks/Alerts; node form on Peers) |
+| `d`                 | remove the selected row (confirmation prompt)             |
+| `t`                 | send a test message to the selected alert                 |
+| `D`                 | toggle the selected alert's `default` flag                |
+| `q` / `Ctrl+C`      | quit                                                      |
 
 Forms run the same control-plane methods the CLI does, so any side
 effect (a mutation, a node add, an alert test) ends up routed through
@@ -247,21 +257,21 @@ qu alert add smtp ops --host ... --from ... --to ... \
 
 Available template variables:
 
-| Variable | Meaning |
-|---|---|
-| `{{.Check.Name}}` | check name |
-| `{{.Check.Type}}` | `http` / `tcp` / `icmp` |
-| `{{.Check.Target}}` | URL or host:port being probed |
-| `{{.Check.ID}}` | UUID |
-| `{{.From}}` | previous state (`up` / `down` / `unknown`) |
-| `{{.To}}` | new state |
-| `{{.Verb}}` | `UP` / `DOWN` / `RECOVERED` |
-| `{{.Snapshot.Reports}}` | total per-node reports counted |
-| `{{.Snapshot.OKCount}}` | how many reported OK |
-| `{{.Snapshot.NotOK}}` | how many reported failure |
-| `{{.Snapshot.Detail}}` | first failure detail string |
-| `{{.NodeID}}` | master that dispatched |
-| `{{.When}}` | RFC3339 timestamp |
+| Variable                | Meaning                                    |
+| ----------------------- | ------------------------------------------ |
+| `{{.Check.Name}}`       | check name                                 |
+| `{{.Check.Type}}`       | `http` / `tcp` / `icmp`                    |
+| `{{.Check.Target}}`     | URL or host:port being probed              |
+| `{{.Check.ID}}`         | UUID                                       |
+| `{{.From}}`             | previous state (`up` / `down` / `unknown`) |
+| `{{.To}}`               | new state                                  |
+| `{{.Verb}}`             | `UP` / `DOWN` / `RECOVERED`                |
+| `{{.Snapshot.Reports}}` | total per-node reports counted             |
+| `{{.Snapshot.OKCount}}` | how many reported OK                       |
+| `{{.Snapshot.NotOK}}`   | how many reported failure                  |
+| `{{.Snapshot.Detail}}`  | first failure detail string                |
+| `{{.NodeID}}`           | master that dispatched                     |
+| `{{.When}}`             | RFC3339 timestamp                          |
 
 `qu alert test <name>` exercises the template against a synthetic
 "homepage going DOWN" transition, so you can verify rendering before
