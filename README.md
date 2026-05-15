@@ -88,7 +88,7 @@ go build -o qu ./cmd/qu
 To stamp the version into the binary:
 
 ```sh
-go build -ldflags "-X main.version=v0.1.0" -o qu ./cmd/qu
+go build -ldflags "-X main.version=v0.0.1" -o qu ./cmd/qu
 qu --version
 ```
 
@@ -100,7 +100,7 @@ amd64 and arm64, and publishes them as a Gitea release with a
 `SHA256SUMS` file alongside.
 
 ```sh
-git tag v0.1.0
+git tag v0.0.1
 git push --tags
 ```
 
@@ -165,6 +165,15 @@ c0d4...  charlie.example.com:9901  true  2026-05-12T15:01:32Z
 ```
 
 ## Adding checks and alerts
+
+> ⚠️ **Alert credentials are replicated cluster-wide.** SMTP passwords
+> and Discord webhook URLs live in `cluster.yaml`, which is mirrored to
+> every node. Any node that can read its own data directory can read
+> every alert secret. Treat compromising one node as compromising every
+> alert credential, and restrict who can reach `$QUPTIME_DIR` on each
+> host (the hardened systemd unit and the Docker image both default to
+> `0700`/`0750`). See [docs/security.md](docs/security.md) for the full
+> threat model.
 
 ```sh
 # alerts first so checks can reference them

@@ -79,7 +79,8 @@ registry on every tag and every push to `master`:
 
 ```
 git.cer.sh/axodouble/quptime:master   # tip of main
-git.cer.sh/axodouble/quptime:v0.1.0   # tagged release
+git.cer.sh/axodouble/quptime:latest   # latest tagged release
+git.cer.sh/axodouble/quptime:v0.0.1   # pinned release
 ```
 
 See the [Docker deployment guide](deployment/docker.md) for compose
