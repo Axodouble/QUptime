@@ -34,6 +34,12 @@ import (
 const (
 	DefaultHeartbeatInterval = 1 * time.Second
 	DefaultDeadAfter         = 4 * time.Second
+	// DefaultMasterCooldown is the grace period a returning peer must
+	// stay continuously live before it's allowed to displace the
+	// currently-elected master. Without it, a self-monitoring master
+	// that briefly drops would reclaim the role immediately on return
+	// and disrupt anything watching its TCP port.
+	DefaultMasterCooldown = 2 * time.Minute
 )
 
 // VersionObserver is invoked whenever a heartbeat exchange reveals
@@ -50,12 +56,14 @@ type Manager struct {
 
 	heartbeatInterval time.Duration
 	deadAfter         time.Duration
+	masterCooldown    time.Duration
 
-	mu       sync.RWMutex
-	term     uint64
-	masterID string
-	lastSeen map[string]time.Time // peerID -> last contact (sent or recv)
-	addrOf   map[string]string    // peerID -> advertise addr (last known)
+	mu        sync.RWMutex
+	term      uint64
+	masterID  string
+	lastSeen  map[string]time.Time // peerID -> last contact (sent or recv)
+	liveSince map[string]time.Time // peerID -> start of current liveness streak
+	addrOf    map[string]string    // peerID -> advertise addr (last known)
 
 	observer VersionObserver
 }
@@ -70,7 +78,9 @@ func New(selfID string, cluster *config.ClusterConfig, client *transport.Client)
 		client:            client,
 		heartbeatInterval: DefaultHeartbeatInterval,
 		deadAfter:         DefaultDeadAfter,
+		masterCooldown:    DefaultMasterCooldown,
 		lastSeen:          map[string]time.Time{},
+		liveSince:         map[string]time.Time{},
 		addrOf:            map[string]string{},
 	}
 }
@@ -242,7 +252,15 @@ func (m *Manager) tick(ctx context.Context) {
 
 func (m *Manager) markLive(id string) {
 	m.mu.Lock()
-	m.lastSeen[id] = time.Now()
+	now := time.Now()
+	prev, ok := m.lastSeen[id]
+	// A peer entering its first liveness streak — or returning after
+	// the dead-after window expired — resets liveSince. Subsequent
+	// heartbeats within the streak leave it untouched.
+	if !ok || now.Sub(prev) > m.deadAfter {
+		m.liveSince[id] = now
+	}
+	m.lastSeen[id] = now
 	m.mu.Unlock()
 }
 
@@ -276,7 +294,41 @@ func (m *Manager) recomputeMaster() {
 
 	var newMaster string
 	if len(live) >= quorum && len(live) > 0 {
-		newMaster = live[0] // lowest NodeID wins
+		// Without an incumbent the cluster is bootstrapping or
+		// has just regained quorum, so elect immediately — there's
+		// nothing to protect from a handoff.
+		if m.masterID == "" {
+			newMaster = live[0]
+		} else {
+			newMaster = m.masterID
+			now := time.Now()
+			incumbentLive := false
+			for _, id := range live {
+				if id == m.masterID {
+					incumbentLive = true
+					break
+				}
+			}
+			// If the incumbent is no longer live, any live peer
+			// may take over without waiting.
+			if !incumbentLive {
+				newMaster = live[0]
+			} else {
+				// Incumbent is live. A peer with a lower NodeID
+				// may only displace it after it has stayed
+				// continuously live for masterCooldown.
+				for _, id := range live {
+					if id >= m.masterID {
+						break // sorted ascending — nobody lower left
+					}
+					since, ok := m.liveSince[id]
+					if ok && now.Sub(since) >= m.masterCooldown {
+						newMaster = id
+						break
+					}
+				}
+			}
+		}
 	}
 	if newMaster != m.masterID {
 		m.term++
