@@ -25,12 +25,20 @@ type discordPayload struct {
 }
 
 // sendDiscord posts msg.Subject + body to the configured webhook URL.
+// When the alert has a custom BodyTemplate, the rendered body is shipped
+// verbatim — the operator has opted out of the default subject header
+// and code-block wrapping in favour of their own formatting.
 func sendDiscord(a *config.Alert, msg Message) error {
 	if a.DiscordWebhook == "" {
 		return errors.New("discord webhook url not set")
 	}
 
-	content := msg.Subject + "\n```\n" + msg.Body + "\n```"
+	var content string
+	if a.BodyTemplate != "" {
+		content = msg.Body
+	} else {
+		content = msg.Subject + "\n```\n" + msg.Body + "\n```"
+	}
 	raw, err := json.Marshal(discordPayload{Content: content})
 	if err != nil {
 		return err
