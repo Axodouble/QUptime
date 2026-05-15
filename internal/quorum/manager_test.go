@@ -119,6 +119,127 @@ func TestDeadAfterEvictsStaleLiveness(t *testing.T) {
 	}
 }
 
+// heartbeatLoop simulates the production heartbeat cadence — calling
+// markLive for the given peers more frequently than deadAfter, so a
+// peer that's "live throughout" never has its liveSince reset by the
+// dead-after gap heuristic. It returns when the context's deadline
+// hits.
+func heartbeatLoop(t *testing.T, m *Manager, dur time.Duration, peers ...string) {
+	t.Helper()
+	deadline := time.Now().Add(dur)
+	interval := m.deadAfter / 4
+	if interval < time.Millisecond {
+		interval = time.Millisecond
+	}
+	for time.Now().Before(deadline) {
+		for _, p := range peers {
+			m.markLive(p)
+		}
+		m.recomputeMaster()
+		time.Sleep(interval)
+	}
+}
+
+func TestReturningLowerIDWaitsForCooldown(t *testing.T) {
+	_, m := threeNode("b")
+	m.deadAfter = 80 * time.Millisecond
+	m.masterCooldown = 200 * time.Millisecond
+
+	// Bootstrap: all three live, "a" elected.
+	m.markLive("a")
+	m.markLive("b")
+	m.markLive("c")
+	m.recomputeMaster()
+	if m.Master() != "a" {
+		t.Fatalf("initial master=%q want a", m.Master())
+	}
+
+	// "a" drops — only b/c heartbeat. Long enough to age a out and let
+	// b take over.
+	heartbeatLoop(t, m, 120*time.Millisecond, "b", "c")
+	if m.Master() != "b" {
+		t.Fatalf("after a-drop master=%q want b", m.Master())
+	}
+
+	// "a" returns. Verify b stays master for less than the cooldown.
+	heartbeatLoop(t, m, 120*time.Millisecond, "a", "b", "c")
+	if m.Master() != "b" {
+		t.Errorf("mid-cooldown master=%q want b", m.Master())
+	}
+
+	// Past the cooldown, a reclaims master.
+	heartbeatLoop(t, m, 120*time.Millisecond, "a", "b", "c")
+	if m.Master() != "a" {
+		t.Errorf("after cooldown master=%q want a", m.Master())
+	}
+}
+
+func TestCooldownResetsOnFlap(t *testing.T) {
+	_, m := threeNode("b")
+	m.deadAfter = 80 * time.Millisecond
+	m.masterCooldown = 200 * time.Millisecond
+
+	m.markLive("a")
+	m.markLive("b")
+	m.markLive("c")
+	m.recomputeMaster()
+
+	// a drops, b becomes master.
+	heartbeatLoop(t, m, 120*time.Millisecond, "b", "c")
+	if m.Master() != "b" {
+		t.Fatalf("master=%q want b", m.Master())
+	}
+
+	// a returns briefly, then drops again before cooldown elapses.
+	heartbeatLoop(t, m, 100*time.Millisecond, "a", "b", "c")
+	if m.Master() != "b" {
+		t.Fatalf("during first cooldown master=%q want b", m.Master())
+	}
+	heartbeatLoop(t, m, 120*time.Millisecond, "b", "c") // a ages out again
+	if m.Master() != "b" {
+		t.Fatalf("after a-reflap master=%q want b", m.Master())
+	}
+
+	// a returns for the second time — cooldown restarts here.
+	// Wait less than a full cooldown — b should still be master.
+	heartbeatLoop(t, m, 100*time.Millisecond, "a", "b", "c")
+	if m.Master() != "b" {
+		t.Errorf("partway through fresh cooldown master=%q want b", m.Master())
+	}
+
+	// Past the full fresh cooldown, a takes over.
+	heartbeatLoop(t, m, 150*time.Millisecond, "a", "b", "c")
+	if m.Master() != "a" {
+		t.Errorf("after fresh cooldown master=%q want a", m.Master())
+	}
+}
+
+func TestNewMasterAfterQuorumLossIgnoresCooldown(t *testing.T) {
+	_, m := threeNode("b")
+	m.deadAfter = 50 * time.Millisecond
+	m.masterCooldown = 1 * time.Hour // would block election if applied
+
+	// Bootstrap into no-master state by letting all peers age out.
+	m.markLive("a")
+	m.markLive("b")
+	m.markLive("c")
+	m.recomputeMaster()
+	time.Sleep(80 * time.Millisecond)
+	m.markLive("b")
+	m.recomputeMaster()
+	if m.Master() != "" {
+		t.Fatalf("master=%q want empty (quorum lost)", m.Master())
+	}
+
+	// Quorum regained — incumbent is empty, election must be immediate.
+	m.markLive("a")
+	m.markLive("b")
+	m.recomputeMaster()
+	if m.Master() != "a" {
+		t.Errorf("post-recovery master=%q want a (no cooldown when empty)", m.Master())
+	}
+}
+
 func TestVersionObserverFiresOnHigherVersion(t *testing.T) {
 	cluster := &config.ClusterConfig{Version: 2}
 	m := New("a", cluster, nil)

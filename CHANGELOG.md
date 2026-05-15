@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed 
+
+- #3 Master going up in the same window as service going up moves unknown -> online to ignore alert
+Added a cooldown to the master election process.
+- #1 Previously up services are alerted as going back up if the master goes down
+Ignore `unknown` -> `online` transitions during master election cooldown.
+
 ## [v0.0.2] — 2026-05-15
 
 ### Fixed
