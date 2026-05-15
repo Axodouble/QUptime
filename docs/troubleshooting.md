@@ -35,6 +35,25 @@ flapping. Causes:
 - Heartbeat timeouts (default 4s) are too tight for your inter-node
   link. Rebuild with a higher `DefaultDeadAfter` if you need it.
 
+## Primary master came back but the cluster hasn't switched to it
+
+**What it means.** Working as designed. After a returning peer with a
+lower NodeID rejoins, the quorum manager waits
+`DefaultMasterCooldown` (2 minutes) before letting it displace the
+incumbent. The window prevents a self-monitoring master from flapping
+the role in lock-step with its own restart.
+
+How to confirm:
+
+- `qu status` on every node shows the same (current) master and a
+  steady `term` — not flapping. The lower-NodeID peer is in the live
+  set but not yet master.
+- After ~2 minutes of continuous liveness, `term` bumps once and the
+  master switches to the lower-NodeID peer.
+
+If you need a different window, change `DefaultMasterCooldown` in
+`internal/quorum/manager.go` and rebuild.
+
 ## A check is stuck in `unknown`
 
 **What it means.** The aggregator has no fresh reports for that check.

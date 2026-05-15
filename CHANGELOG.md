@@ -6,12 +6,22 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
-### Fixed 
+### Changed
 
-- #3 Master going up in the same window as service going up moves unknown -> online to ignore alert
-Added a cooldown to the master election process.
-- #1 Previously up services are alerted as going back up if the master goes down
-Ignore `unknown` -> `online` transitions during master election cooldown.
+- **Master election cooldown (2 min).** A returning peer with a
+  lower NodeID no longer reclaims master the instant it reappears.
+  It must stay continuously live for `DefaultMasterCooldown`
+  (2 minutes) before displacing the incumbent. Bootstrap and
+  quorum-regained-from-empty still elect immediately; the cooldown
+  only protects an active incumbent. Fixes #3: a self-monitoring
+  master (TCP check on its own `:9901`) would otherwise flap the
+  role in lock-step with its own restart.
+
+### Fixed
+
+- #1 Previously up services are alerted as going back up if the master goes down.
+  Ignore `unknown` -> `up` transitions during master election; still
+  alert on `unknown` -> `down` by design.
 
 ## [v0.0.2] — 2026-05-15
 

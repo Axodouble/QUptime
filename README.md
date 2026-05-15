@@ -94,7 +94,11 @@ the hysteresis that absorbs network blips.
 
 Master election is deterministic: among the live members of the quorum,
 the node with the lexicographically smallest NodeID wins. No
-negotiation, no split-brain window.
+negotiation, no split-brain window. A 2-minute **master cooldown**
+keeps the current master in place until a returning lower-NodeID peer
+has been continuously live for the full window, so a self-monitoring
+master that briefly drops doesn't flap the role back the instant it
+reappears.
 
 `cluster.yaml` is the single replicated source of truth (peers, checks,
 alerts). Mutations from the CLI route through the master, which bumps a

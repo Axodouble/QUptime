@@ -118,6 +118,35 @@ The `term` integer in `qu status` is bumped every time the elected
 master changes (including transitions to and from "no master"). Use it
 to spot flappy clusters.
 
+### Master cooldown
+
+The bare "lowest-live-NodeID wins" rule has one unpleasant edge: if the
+primary master is also being monitored by `qu` itself (a TCP check on
+its own `:9901`, say), a brief restart causes a master flap *and* a
+state flap in lock-step. The new master sees the old master come back
+on the next tick and immediately hands the role back, taking the
+just-recovering node from `unknown` to `up` with no quiet period.
+
+To absorb that, the quorum manager applies a **master cooldown**
+(`DefaultMasterCooldown`, 2 minutes) before a peer with a lower NodeID
+may displace the incumbent. The rules:
+
+- The cooldown timer starts on the **first heartbeat after a
+  dead-after gap** — i.e. when a peer re-enters the live set after
+  having aged out. Continuous heartbeats never restart it.
+- A flap during the cooldown resets the timer; the returning peer
+  must clear a full fresh window before taking over.
+- The cooldown applies **only when an incumbent master exists**.
+  Bootstrap and quorum-regained-from-empty elect the lowest-NodeID
+  live peer immediately, because there is no role to protect.
+- If the incumbent drops out of the live set, the cooldown is
+  irrelevant — any live peer may take over without waiting.
+
+The constant lives in `internal/quorum/manager.go`. Lower it for
+faster fail-back at the cost of monitoring-self flap risk; raise it
+to give a recovering master longer to settle before reclaiming the
+role.
+
 ## Catch-up when a node reconnects
 
 This is the scenario most people ask about: node C is offline, the
