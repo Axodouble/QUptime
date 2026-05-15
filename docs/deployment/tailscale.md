@@ -53,12 +53,21 @@ services:
   quptime:
     image: git.cer.sh/axodouble/quptime:v0.1.0
     container_name: quptime
+    environment:
+      # host:port other QUptime nodes use to reach this one. Should be
+      # this node's tailnet IP / MagicDNS name. Auto-init reads this on
+      # first start.
+      - QUPTIME_ADVERTISE=${QUPTIME_ADVERTISE}
+      # Shared cluster join secret. Omit on the very first node to have
+      # it generated and logged for you, then copy it into every
+      # follower's .env.
+      - QUPTIME_CLUSTER_SECRET=${QUPTIME_CLUSTER_SECRET:-}
     volumes:
       - quptime:/etc/quptime
     network_mode: "service:tailscale"
     depends_on: [tailscale]
     cap_add: [NET_RAW]
-    # No restart directive yet — needs `qu init` first.
+    restart: unless-stopped
 
 volumes:
   tailscale:
@@ -67,43 +76,41 @@ volumes:
 
 ### One-time bootstrap
 
-Each host runs the same script with different `HOST` and `TAILSCALE_AUTHKEY`:
+Each host runs the same compose file with a per-host `.env`:
 
 ```sh
-# .env
+# .env (alpha — the first node)
 HOST=alpha
 TAILSCALE_AUTHKEY=tskey-auth-xxxxxxxx
+QUPTIME_ADVERTISE=100.64.1.1:9901          # this node's tailnet IP
+# QUPTIME_CLUSTER_SECRET left unset — will be generated on first boot.
 ```
 
-Start Tailscale alone first so it gets an IP:
+Start the stack on the first host. `qu serve` auto-initialises the
+volume using the env vars above, so a single `docker compose up`
+brings everything up:
 
 ```sh
-docker compose up -d tailscale
-sleep 5
-TSIP=$(docker compose exec tailscale tailscale ip --4)
-echo "this node's tailnet IP: $TSIP"
+docker compose up -d
+docker compose logs quptime | grep -A1 'cluster secret'
+# Pipe the secret through your password manager.
 ```
 
-On the **first** host, init without `--secret`:
+On every **other** host, write the same `.env` plus the captured
+secret:
 
 ```sh
-docker compose run --rm quptime init --advertise "$TSIP:9901"
-# Grab the printed secret; pipe through your password manager.
+# .env (bravo, charlie, …)
+HOST=bravo
+TAILSCALE_AUTHKEY=tskey-auth-xxxxxxxx
+QUPTIME_ADVERTISE=100.64.1.2:9901
+QUPTIME_CLUSTER_SECRET=<paste from alpha>
 ```
 
-On every **other** host, paste the secret:
+Bring them up and invite them from the first node:
 
 ```sh
-docker compose run --rm quptime init \
-  --advertise "$TSIP:9901" \
-  --secret "$CLUSTER_SECRET"
-```
-
-Then bring up `qu` on every node and invite from the first:
-
-```sh
-# Each host
-docker compose up -d quptime
+docker compose up -d
 
 # From alpha
 docker compose exec quptime qu node add 100.64.1.2:9901

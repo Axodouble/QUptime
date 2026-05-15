@@ -27,6 +27,14 @@ services:
     image: git.cer.sh/axodouble/quptime:v0.1.0
     container_name: quptime
     restart: unless-stopped
+    environment:
+      # host:port other nodes use to reach this one. Must be reachable
+      # from every peer — the loopback inside the container is useless.
+      - QUPTIME_ADVERTISE=<host-ip>:9901
+      # Pre-shared join secret. Omit on the very first node and read
+      # the generated value out of `docker logs quptime`, then set
+      # this env var on every follower before bringing them up.
+      - QUPTIME_CLUSTER_SECRET=${QUPTIME_CLUSTER_SECRET:-}
     ports:
       - "9901:9901"
     volumes:
@@ -41,17 +49,25 @@ volumes:
   quptime-data:
 ```
 
-You must **`qu init` before the daemon will start**. With this compose
-file:
+`qu serve` auto-initialises the data volume on first start using the
+`QUPTIME_*` env vars (see [configuration.md](../configuration.md) for
+the full list). One command brings everything up:
 
 ```sh
-docker compose run --rm quptime init --advertise <host-ip>:9901
 docker compose up -d
 docker compose exec quptime qu status
 ```
 
-`<host-ip>` must be reachable from every other node — the loopback
-address inside the container is useless to peers.
+On the very first node, capture the auto-generated cluster secret:
+
+```sh
+docker compose logs quptime | grep -A1 'cluster secret'
+```
+
+Copy that value into the `QUPTIME_CLUSTER_SECRET` env var of every
+follower before starting them, otherwise their join RPCs will be
+rejected. The full list of accepted env vars lives in
+[configuration.md](../configuration.md#nodeyaml-field-overrides).
 
 ## Three-node compose on a single host
 
@@ -69,18 +85,27 @@ services:
   alpha:
     <<: *quptime
     container_name: alpha
+    environment:
+      - QUPTIME_ADVERTISE=alpha:9901
+      # First node: leave secret unset and read it from `docker logs`.
     ports: ["9901:9901"]
     volumes: ["alpha-data:/etc/quptime"]
 
   bravo:
     <<: *quptime
     container_name: bravo
+    environment:
+      - QUPTIME_ADVERTISE=bravo:9901
+      - QUPTIME_CLUSTER_SECRET=${SECRET}
     ports: ["9902:9901"]
     volumes: ["bravo-data:/etc/quptime"]
 
   charlie:
     <<: *quptime
     container_name: charlie
+    environment:
+      - QUPTIME_ADVERTISE=charlie:9901
+      - QUPTIME_CLUSTER_SECRET=${SECRET}
     ports: ["9903:9901"]
     volumes: ["charlie-data:/etc/quptime"]
 
@@ -93,15 +118,12 @@ volumes:
 Bootstrap:
 
 ```sh
-# First node: prints the secret to stdout.
-docker compose run --rm alpha init --advertise alpha:9901
-# Capture the secret (or read it back from alpha-data).
-SECRET=$(docker compose exec alpha cat /etc/quptime/node.yaml | grep cluster_secret | awk '{print $2}')
-
-docker compose run --rm bravo   init --advertise bravo:9901   --secret "$SECRET"
-docker compose run --rm charlie init --advertise charlie:9901 --secret "$SECRET"
-
-docker compose up -d
+# 1. Start alpha first to mint the cluster secret.
+docker compose up -d alpha
+# 2. Read the secret off alpha's stdout.
+export SECRET=$(docker compose logs alpha | awk '/cluster secret/{getline; print $1}')
+# 3. Bring up the followers — they pick up the secret from $SECRET.
+docker compose up -d bravo charlie
 
 # Invite from alpha. The hostnames resolve over the compose network.
 docker compose exec alpha qu node add bravo:9901
@@ -127,6 +149,9 @@ services:
     image: git.cer.sh/axodouble/quptime:v0.1.0
     container_name: quptime
     restart: unless-stopped
+    environment:
+      - QUPTIME_ADVERTISE=${QUPTIME_ADVERTISE}        # host:9901 reachable from peers
+      - QUPTIME_CLUSTER_SECRET=${QUPTIME_CLUSTER_SECRET}
     ports:
       - "9901:9901"
     volumes:
@@ -134,6 +159,10 @@ services:
     cap_add:
       - NET_RAW
 ```
+
+Put the per-host values (`QUPTIME_ADVERTISE`, `QUPTIME_CLUSTER_SECRET`)
+in a sibling `.env` file or a config-management secret so the compose
+file itself is identical across hosts.
 
 Persistence is a bind-mount under `/srv/quptime/data` so backups and
 upgrades hit a known path. See [operations.md](../operations.md) for
