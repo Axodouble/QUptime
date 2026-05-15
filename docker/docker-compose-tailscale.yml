@@ -25,7 +25,7 @@ services:
     restart: unless-stopped
 
   quptime:
-    image: git.cer.sh/axodouble/quptime:master
+    image: git.cer.sh/axodouble/quptime:latest
     container_name: quptime
     environment:
       # host:port other QUptime nodes use to reach this one. Use the
