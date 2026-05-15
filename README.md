@@ -27,6 +27,23 @@ definition, can't tell you when it's the one that's down. `qu` solves
 both: run it on a few cheap hosts in different networks and they vote
 on truth. If one of them loses its uplink, the rest keep alerting.
 
+## Documentation
+
+This README is the quick-start. For production use, the longer guides
+live under [`docs/`](docs/README.md):
+
+| If you want to…                                       | Read                                                               |
+| ----------------------------------------------------- | ------------------------------------------------------------------ |
+| understand the consensus / replication model          | [docs/architecture.md](docs/architecture.md)                       |
+| reference every field in `node.yaml` / `cluster.yaml` | [docs/configuration.md](docs/configuration.md)                     |
+| deploy on Linux with systemd hardening                | [docs/deployment/systemd.md](docs/deployment/systemd.md)           |
+| deploy with Docker / docker-compose                   | [docs/deployment/docker.md](docs/deployment/docker.md)             |
+| deploy over Tailscale or WireGuard                    | [docs/deployment/tailscale.md](docs/deployment/tailscale.md)       |
+| expose `qu` on the open internet safely               | [docs/deployment/public-internet.md](docs/deployment/public-internet.md) |
+| upgrade, back up, or recover from failures            | [docs/operations.md](docs/operations.md)                           |
+| understand the trust model and rotate identities      | [docs/security.md](docs/security.md)                               |
+| diagnose a misbehaving cluster                        | [docs/troubleshooting.md](docs/troubleshooting.md)                 |
+
 ## Architecture
 
 ```
