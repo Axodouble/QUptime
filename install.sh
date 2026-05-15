@@ -175,6 +175,21 @@ fi
 
 install -d -o "$SERVICE_USER" -g "$SERVICE_GROUP" -m 0750 "$DATA_DIR"
 
+# Reassert ownership on the dir's contents. Two cases this catches:
+#   - re-running the installer over a previous install where the
+#     service user/group changed
+#   - the operator ran `qu init` or `qu serve` as root once (easy
+#     mistake: `sudo qu init` is shorter than the documented
+#     `sudo -u quptime qu init`). When the daemon runs as root its
+#     DataDir() resolves to /etc/quptime, so any files it writes land
+#     here owned by root:root mode 0600 — the systemd service then
+#     fails with `open node.yaml: permission denied`.
+# chown -R only changes ownership, not perms, so file modes set by
+# the daemon (0600 for node.yaml, 0700 for keys/) are preserved.
+if [ -n "$(ls -A "$DATA_DIR" 2>/dev/null)" ]; then
+    chown -R "$SERVICE_USER:$SERVICE_GROUP" "$DATA_DIR"
+fi
+
 echo "> writing $SERVICE_FILE"
 cat > "$SERVICE_FILE" <<'EOF'
 [Unit]
@@ -252,10 +267,17 @@ Next steps:
               # On follower nodes, also set the shared join secret:
               # Environment=QUPTIME_CLUSTER_SECRET=<paste from first node>
 
-       b) Or run \`qu init\` once explicitly:
+       b) Or run \`qu init\` once explicitly. IMPORTANT: run as the
+          ${SERVICE_USER} user, not root — otherwise node.yaml lands
+          owned by root and the service can't read it on start.
 
             sudo -u ${SERVICE_USER} QUPTIME_DIR=${DATA_DIR} \\
               qu init --advertise <this-host>:9901
+
+          If you already ran it as root and the service is failing
+          with "permission denied" on node.yaml, repair with:
+
+            sudo chown -R ${SERVICE_USER}:${SERVICE_GROUP} ${DATA_DIR}
 
   2. Start the service:
 
