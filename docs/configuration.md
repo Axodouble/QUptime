@@ -35,6 +35,8 @@ Override the socket path with `QUPTIME_SOCKET=/run/foo.sock`.
 
 ## Environment variables
 
+### Paths
+
 | Variable          | Purpose                                                                                                                   |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `QUPTIME_DIR`     | Data directory. Defaults to `/etc/quptime` (root) or `$XDG_CONFIG_HOME/quptime`.                                          |
@@ -42,8 +44,51 @@ Override the socket path with `QUPTIME_SOCKET=/run/foo.sock`.
 | `XDG_CONFIG_HOME` | Honored when running as non-root and `QUPTIME_DIR` is unset.                                                              |
 | `XDG_RUNTIME_DIR` | Honored when running as non-root and `QUPTIME_SOCKET` is unset.                                                           |
 
+### `node.yaml` field overrides
+
+Every field in `node.yaml` can also be supplied via an environment
+variable. This is the recommended way to drive Docker / Compose
+deployments: drop the env vars into the compose file and the daemon
+will bootstrap on first start without a separate `qu init` step.
+
+| Variable                 | `node.yaml` field | Notes                                                                                                          |
+| ------------------------ | ----------------- | -------------------------------------------------------------------------------------------------------------- |
+| `QUPTIME_NODE_ID`        | `node_id`         | Pin a specific UUID. Leave unset to let `qu init` / auto-init generate one.                                    |
+| `QUPTIME_BIND_ADDR`      | `bind_addr`       | Defaults to `0.0.0.0`.                                                                                         |
+| `QUPTIME_BIND_PORT`      | `bind_port`       | Integer. Defaults to `9901`.                                                                                   |
+| `QUPTIME_ADVERTISE`      | `advertise`       | `host:port` other peers use to reach this node. Required when bound to a wildcard or behind NAT.               |
+| `QUPTIME_CLUSTER_SECRET` | `cluster_secret`  | Pre-shared join secret. Set the same value on every node. If unset on the very first node, one is generated.   |
+
+Precedence is **env > file > compiled default**. Non-empty env values
+win over whatever is stored in `node.yaml` at load time, so changing a
+variable in `docker-compose.yml` and restarting the container is
+enough to roll out new bind/advertise values — no on-disk edit
+required. Empty env values are ignored (they will not clear a
+previously persisted field).
+
+For `qu init` specifically, explicit command-line flags take
+precedence over env values; env values fill in only the fields the
+operator did not pass on the command line.
+
 The daemon does not read any other environment variables. SMTP, Discord,
 and HTTP probe targets are configured exclusively in `cluster.yaml`.
+
+## Auto-init on `qu serve`
+
+If `node.yaml` does not exist when `qu serve` starts, the daemon
+bootstraps it in-place using the `QUPTIME_*` env vars above: a fresh
+UUID is generated (or `QUPTIME_NODE_ID` is honored if set), an RSA
+keypair and self-signed cert are written under `keys/`, and
+`cluster.yaml` is seeded with this node as its sole peer. If no
+`QUPTIME_CLUSTER_SECRET` was provided, a random one is generated and
+printed to stderr — copy it to every follower node's
+`QUPTIME_CLUSTER_SECRET` (or `--secret` flag) before they start.
+
+This is what makes the docker-compose flow `docker compose up`-only
+on a fresh volume. To opt out (e.g. so a misconfigured deployment
+crashes loudly instead of silently generating a new identity), run
+`qu init` against the volume yourself before letting `qu serve` ever
+see it.
 
 ## `node.yaml` — local identity
 

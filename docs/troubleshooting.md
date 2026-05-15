@@ -146,15 +146,26 @@ both call this out.
 load node.yaml: open ...: no such file or directory
 ```
 
-Run `qu init` before `qu serve`. The daemon does not auto-init —
-silently generating identities and secrets would be a worse failure
-mode than crashing.
+`qu serve` normally auto-bootstraps a missing `node.yaml` using the
+`QUPTIME_*` env vars (see
+[configuration.md](configuration.md#auto-init-on-qu-serve)). If you
+still see this error, the most likely causes are:
+
+- The data directory is read-only or owned by a different user — the
+  bootstrap can't write `node.yaml`. Fix permissions on
+  `$QUPTIME_DIR`.
+- Something else removed `node.yaml` mid-run (a config-management
+  tool, a misconfigured volume). Re-run `qu serve` and it will
+  rebuild from env, or run `qu init` manually with the flags you
+  want.
 
 ```
 node.yaml has empty node_id — run `qu init` first
 ```
 
-Same fix.
+`node.yaml` exists but lacks a `node_id`. Either delete the file and
+let auto-init regenerate it, or run `qu init` against a wiped data
+dir.
 
 ```
 listen tcp :9901: bind: address already in use
@@ -197,3 +208,7 @@ sudo systemctl start quptime
 
 The data directory is the only state. Wipe it and you're back to a
 fresh node.
+
+Under Docker (or any env-driven deploy), the explicit `qu init` step
+isn't needed — wiping the data volume and restarting the container is
+enough; `qu serve` will re-bootstrap from the `QUPTIME_*` env vars.

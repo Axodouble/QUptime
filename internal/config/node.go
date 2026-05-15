@@ -3,8 +3,24 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"gopkg.in/yaml.v3"
+)
+
+// Environment variable names that override fields on NodeConfig at
+// load time. Intended to let `docker compose` setups drive a node's
+// identity and listener configuration without having to bake a
+// node.yaml into the image or run `qu init` manually first.
+//
+// Empty values are ignored — they do not clear a field. The override
+// order is therefore: env (non-empty) > file > compiled default.
+const (
+	EnvNodeID        = "QUPTIME_NODE_ID"
+	EnvBindAddr      = "QUPTIME_BIND_ADDR"
+	EnvBindPort      = "QUPTIME_BIND_PORT"
+	EnvAdvertise     = "QUPTIME_ADVERTISE"
+	EnvClusterSecret = "QUPTIME_CLUSTER_SECRET"
 )
 
 // NodeConfig is the per-node, never-replicated identity file.
@@ -45,6 +61,34 @@ func (n *NodeConfig) AdvertiseAddr() string {
 	return fmt.Sprintf("%s:%d", bind, n.BindPort)
 }
 
+// ApplyEnvOverrides folds QUPTIME_* environment variables onto n.
+// Non-empty env values win over the existing field value. Called both
+// by LoadNodeConfig and by the `qu init` / serve auto-init paths so
+// the same precedence rules apply whether the daemon is reading a
+// persisted node.yaml or constructing one from scratch.
+func (n *NodeConfig) ApplyEnvOverrides() error {
+	if v := os.Getenv(EnvNodeID); v != "" {
+		n.NodeID = v
+	}
+	if v := os.Getenv(EnvBindAddr); v != "" {
+		n.BindAddr = v
+	}
+	if v := os.Getenv(EnvBindPort); v != "" {
+		p, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("%s=%q: not an integer: %w", EnvBindPort, v, err)
+		}
+		n.BindPort = p
+	}
+	if v := os.Getenv(EnvAdvertise); v != "" {
+		n.Advertise = v
+	}
+	if v := os.Getenv(EnvClusterSecret); v != "" {
+		n.ClusterSecret = v
+	}
+	return nil
+}
+
 // LoadNodeConfig reads node.yaml from the data dir.
 func LoadNodeConfig() (*NodeConfig, error) {
 	raw, err := os.ReadFile(NodeFilePath())
@@ -54,6 +98,9 @@ func LoadNodeConfig() (*NodeConfig, error) {
 	cfg := &NodeConfig{}
 	if err := yaml.Unmarshal(raw, cfg); err != nil {
 		return nil, fmt.Errorf("parse node.yaml: %w", err)
+	}
+	if err := cfg.ApplyEnvOverrides(); err != nil {
+		return nil, err
 	}
 	if cfg.BindPort == 0 {
 		cfg.BindPort = 9901
