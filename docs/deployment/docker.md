@@ -9,8 +9,9 @@ daemon can bind privileged ports and open ICMP sockets; override with
 
 ```
 git.cer.sh/axodouble/quptime:master          # tip of main, multi-arch
-git.cer.sh/axodouble/quptime:v0.1.0          # tagged release
-git.cer.sh/axodouble/quptime:v0.1.0-amd64    # single-arch (if you must pin)
+git.cer.sh/axodouble/quptime:latest          # latest tagged release
+git.cer.sh/axodouble/quptime:v0.0.1          # specific tagged release
+git.cer.sh/axodouble/quptime:latest-amd64    # single-arch (if you must pin)
 ```
 
 The image embeds `QUPTIME_DIR=/etc/quptime` and declares it a volume —
@@ -24,7 +25,7 @@ For a development cluster or a single-node smoke test:
 # compose.yaml
 services:
   quptime:
-    image: git.cer.sh/axodouble/quptime:v0.1.0
+    image: git.cer.sh/axodouble/quptime:latest
     container_name: quptime
     restart: unless-stopped
     environment:
@@ -76,7 +77,7 @@ For local testing of the full quorum machinery without three machines:
 ```yaml
 # compose.yaml
 x-quptime: &quptime
-  image: git.cer.sh/axodouble/quptime:v0.1.0
+  image: git.cer.sh/axodouble/quptime:latest
   restart: unless-stopped
   cap_add:
     - NET_RAW
@@ -146,7 +147,7 @@ The natural unit is one compose file per host, each running one
 # /etc/qu-stack/compose.yaml
 services:
   quptime:
-    image: git.cer.sh/axodouble/quptime:v0.1.0
+    image: git.cer.sh/axodouble/quptime:latest
     container_name: quptime
     restart: unless-stopped
     environment:

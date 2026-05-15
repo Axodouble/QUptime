@@ -1,0 +1,34 @@
+# Build artifacts
+/qu
+/qu-*
+/dist/
+*.exe
+*.test
+*.out
+
+# Go workspace / module cache (only relevant if vendored)
+/vendor/
+
+# Local node state — never commit anything that looks like a data dir
+/quptime/
+/etc/quptime/
+node.yaml
+cluster.yaml
+trust.yaml
+keys/
+
+# Compose / secrets
+.env
+.env.local
+*.local.yml
+*.local.yaml
+
+# Editor / OS scratch
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test / coverage
+coverage.out
+coverage.html
