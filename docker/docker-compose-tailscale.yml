@@ -1,0 +1,37 @@
+# An example of a docker compose with Tailscale & QUptime.
+# This setup is specifically intended for hosts that may not be able to reach each other directly or have a public IP address.
+
+services:
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: tailscale
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - TS_AUTHKEY=${TAILSCALE_AUTHKEY} # Set this in your .env file with a Tailscale auth key
+      - TS_HOSTNAME=quptime-tailscale
+    volumes:
+      - /dev/net/tun:/dev/net/tun
+      - tailscale:/var/lib/tailscale
+    restart: unless-stopped
+
+  quptime:
+    image: git.cer.sh/axodouble/quptime:master
+    container_name: quptime
+    volumes:
+      - quptime:/etc/quptime
+    ports:
+      - "9901:9901"
+    depends_on:
+      - tailscale
+    # No restart directive, user needs to init quptime first
+    # Run `docker compose -f docker-compose-tailscale.yml run --rm quptime init` to initialize 
+    # the data volume before starting the service
+    # If this is not the master node, use 
+    # `docker compose -f docker-compose-tailscale.yml run --rm quptime --advertise <TAILSCALE_IP>:9901 --secret <SECRET>`
+    # And add the individual nodes to the cluster with `docker compose -f docker-compose-tailscale.yml run --rm quptime node add <OTHER_NODE_IP>:9901`
+    network_mode: "service:tailscale" # Use the Tailscale network stack
+
+volumes:
+  tailscale:
+  quptime:
