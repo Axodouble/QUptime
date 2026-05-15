@@ -1,0 +1,7 @@
+.git
+.gitea
+.claude
+.github
+dist
+*.md
+install.sh

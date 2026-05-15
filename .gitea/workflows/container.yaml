@@ -1,0 +1,73 @@
+name: Container image
+
+# Builds the multi-arch container image. On tag push (v*) it logs in
+# to the Gitea registry on this host and publishes the image as
+# git.cer.sh/<owner>/<repo>:<version> plus :latest. On pull requests
+# it builds without pushing — purely a smoke test that the Dockerfile
+# still works.
+on:
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # github.repository is owner/name with the repo's original casing;
+      # registries require lowercase, so normalise once here and reuse
+      # the result in metadata-action below.
+      - name: Resolve image name
+        id: img
+        run: |
+          repo='${{ github.repository }}'
+          echo "ref=git.cer.sh/${repo,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to Gitea registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: git.cer.sh
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.img.outputs.ref }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      - name: Build (and push on tag)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+          # Inline cache embeds layer metadata into the pushed image
+          # itself — no external cache server needed, which keeps the
+          # workflow self-contained on the Gitea runner.
+          cache-from: type=inline
+          cache-to: type=inline
