@@ -175,20 +175,62 @@ fi
 
 install -d -o "$SERVICE_USER" -g "$SERVICE_GROUP" -m 0750 "$DATA_DIR"
 
-# Reassert ownership on the dir's contents. Two cases this catches:
+# Repair ownership and permissions on the data dir's contents. Catches:
 #   - re-running the installer over a previous install where the
-#     service user/group changed
+#     service user/group changed.
 #   - the operator ran `qu init` or `qu serve` as root once (easy
 #     mistake: `sudo qu init` is shorter than the documented
 #     `sudo -u quptime qu init`). When the daemon runs as root its
 #     DataDir() resolves to /etc/quptime, so any files it writes land
-#     here owned by root:root mode 0600 — the systemd service then
-#     fails with `open node.yaml: permission denied`.
-# chown -R only changes ownership, not perms, so file modes set by
-# the daemon (0600 for node.yaml, 0700 for keys/) are preserved.
-if [ -n "$(ls -A "$DATA_DIR" 2>/dev/null)" ]; then
-    chown -R "$SERVICE_USER:$SERVICE_GROUP" "$DATA_DIR"
-fi
+#     owned by root:root — the systemd service then fails with
+#     `open node.yaml: permission denied`.
+#   - someone or something (a stray `chmod -R`, a misguided backup
+#     restore) tightened or loosened modes. Re-running the installer
+#     should be enough to get back to a working baseline.
+# The canonical layout (mirrors the modes the daemon writes itself
+# in internal/config and internal/crypto):
+#   /etc/quptime/                 quptime:quptime  0750
+#   /etc/quptime/keys/            quptime:quptime  0700
+#   /etc/quptime/node.yaml        quptime:quptime  0600
+#   /etc/quptime/cluster.yaml     quptime:quptime  0600
+#   /etc/quptime/trust.yaml       quptime:quptime  0600
+#   /etc/quptime/keys/private.pem quptime:quptime  0600
+#   /etc/quptime/keys/public.pem  quptime:quptime  0644
+#   /etc/quptime/keys/cert.pem    quptime:quptime  0644
+# The runtime dir /var/run/quptime is owned by systemd via
+# RuntimeDirectory= and rebuilt at each service start, so we leave it
+# alone.
+repair_perms() {
+    # Always reset the top-level dir mode — `install -d` only sets it
+    # on creation, not on re-run.
+    chown "$SERVICE_USER:$SERVICE_GROUP" "$DATA_DIR"
+    chmod 0750 "$DATA_DIR"
+
+    # Reassert ownership across the whole tree in one pass.
+    if [ -n "$(ls -A "$DATA_DIR" 2>/dev/null)" ]; then
+        chown -R "$SERVICE_USER:$SERVICE_GROUP" "$DATA_DIR"
+    fi
+
+    # keys/ is a directory with its own tighter mode.
+    if [ -d "$DATA_DIR/keys" ]; then
+        chmod 0700 "$DATA_DIR/keys"
+    fi
+
+    # Each known file gets its canonical mode if it exists. We don't
+    # create anything that isn't already there — that's `qu init`'s
+    # job — and we don't touch unknown files an operator may have
+    # parked in the dir.
+    local f
+    for f in node.yaml cluster.yaml trust.yaml keys/private.pem; do
+        [ -f "$DATA_DIR/$f" ] && chmod 0600 "$DATA_DIR/$f"
+    done
+    for f in keys/public.pem keys/cert.pem; do
+        [ -f "$DATA_DIR/$f" ] && chmod 0644 "$DATA_DIR/$f"
+    done
+}
+
+repair_perms
+echo "> reasserted ownership ($SERVICE_USER:$SERVICE_GROUP) and modes under $DATA_DIR"
 
 echo "> writing $SERVICE_FILE"
 cat > "$SERVICE_FILE" <<'EOF'
