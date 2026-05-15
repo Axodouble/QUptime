@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **`install.sh` now repairs data-dir permissions on every run.**
+  Re-running the installer reasserts the canonical ownership
+  (`quptime:quptime`) and modes across `/etc/quptime/` — `0750` on
+  the dir, `0700` on `keys/`, `0600` on `node.yaml`, `cluster.yaml`,
+  `trust.yaml`, and `keys/private.pem`, `0644` on `keys/public.pem`
+  and `keys/cert.pem`. Makes the installer the one-step recovery
+  path when something has tampered with modes (e.g. a stray
+  `chmod -R`, a backup restore, or an accidental `sudo qu init`
+  that left files owned by root). Unknown files in the dir are left
+  alone.
+
 ## [v0.1.0] — 2026-05-15
 
 ### Changed

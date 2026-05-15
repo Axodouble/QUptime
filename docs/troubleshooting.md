@@ -172,7 +172,9 @@ still see this error, the most likely causes are:
 
 - The data directory is read-only or owned by a different user — the
   bootstrap can't write `node.yaml`. Fix permissions on
-  `$QUPTIME_DIR`.
+  `$QUPTIME_DIR`. The fastest fix on a standard install is just to
+  re-run `install.sh` — it reasserts the canonical ownership and
+  modes on the whole tree without touching your config.
 - Something else removed `node.yaml` mid-run (a config-management
   tool, a misconfigured volume). Re-run `qu serve` and it will
   rebuild from env, or run `qu init` manually with the flags you
@@ -197,7 +199,9 @@ load private key: ...
 ```
 
 Permissions on `keys/private.pem` are wrong — should be 0600 and owned
-by the daemon user. Fix and restart.
+by the daemon user. Fix and restart. Re-running `install.sh` on a
+standard install is the easiest path: it repairs ownership and modes
+on the entire data dir.
 
 ## Probes look much slower than expected
 

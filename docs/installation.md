@@ -70,6 +70,15 @@ What it does:
    `/etc/systemd/system/quptime.service` (hardened — matches the unit
    in [systemd.md](deployment/systemd.md)). Enables but does not start
    the service, so you can configure identity before first boot.
+5. Repairs ownership and modes under `/etc/quptime/` to the canonical
+   layout (`0750` on the dir, `0700` on `keys/`, `0600` on
+   `node.yaml` / `cluster.yaml` / `trust.yaml` / `keys/private.pem`,
+   `0644` on `keys/public.pem` / `keys/cert.pem`). This makes the
+   installer idempotent for permission damage — if something
+   tightened or loosened modes (a stray `chmod -R`, a misguided
+   backup restore, an accidental `sudo qu init`), re-running
+   `install.sh` puts everything back without touching the contents
+   of those files.
 
 ## Build from source
 
