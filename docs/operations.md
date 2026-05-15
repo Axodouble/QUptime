@@ -183,6 +183,7 @@ Options:
 | `quorum`       | `true`         | `false` — no mutations, no alerts.                        |
 | `master`       | a NodeID       | `(none — ...)` — quorum lost or election in flight.       |
 | `term`         | slow growth    | rapid growth → master flapping, network unstable.         |
+| `master` after a restart of the primary | unchanged for ~2 min, then bumps back | bumps back immediately → cooldown disabled or misconfigured. |
 | `config ver`   | identical across nodes | divergence → a node is stuck pulling.             |
 
 A simple cron sentinel on each node:
