@@ -14,11 +14,36 @@ trust — no central CA, no shared secret.
 
 ### From pre-built binary
 
-This can be done in one step, either by downloading the latest release from
-the [Gitea releases page](https://git.cer.sh/axodouble/quptime/releases) or by running the following script:
+The canonical home is Gitea; the repo is push-mirrored to GitHub on
+every tag. Releases and multi-arch container images are published to
+both.
+
+| Source           | Releases                                                     | Container image                  |
+| ---------------- | ------------------------------------------------------------ | -------------------------------- |
+| Gitea (primary)  | <https://git.cer.sh/axodouble/quptime/releases>              | `git.cer.sh/axodouble/quptime`   |
+| GitHub (mirror)  | <https://github.com/Axodouble/QUptime/releases>              | `ghcr.io/axodouble/quptime`      |
+
+One-step install — tries Gitea first, falls back to GitHub automatically:
+
 ```sh
 curl -fsSL https://git.cer.sh/Axodouble/QUptime/raw/branch/master/install.sh | sudo bash
+# or, via the GitHub mirror:
+# curl -fsSL https://raw.githubusercontent.com/Axodouble/QUptime/master/install.sh | sudo bash
 ```
+
+The script verifies the binary against the published `SHA256SUMS`
+before installing and refuses to proceed on a mismatch.
+
+### From Docker
+
+```sh
+docker pull git.cer.sh/axodouble/quptime:latest
+# or, via the GitHub mirror:
+# docker pull ghcr.io/axodouble/quptime:latest
+```
+
+See [docs/deployment/docker.md](docs/deployment/docker.md) for compose
+recipes.
 
 ## Why
 

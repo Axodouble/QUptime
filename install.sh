@@ -1,12 +1,17 @@
 #!/bin/bash
 # QUptime installer.
 #
-# Downloads the latest released `qu` binary from the Gitea release
-# page, verifies it against the published SHA256SUMS, installs it to
-# /usr/local/bin, and (on systemd hosts) drops in a hardened
-# quptime.service that matches the unit documented in
-# docs/deployment/systemd.md. Idempotent — re-running upgrades the
-# binary and refreshes the unit without touching the data directory.
+# Downloads the latest released `qu` binary, verifies it against the
+# published SHA256SUMS, installs it to /usr/local/bin, and (on systemd
+# hosts) drops in a hardened quptime.service that matches the unit
+# documented in docs/deployment/systemd.md.
+#
+# Release sources, tried in order:
+#   1. Gitea:    git.cer.sh/axodouble/quptime/releases   (primary — canonical home)
+#   2. GitHub:   github.com/Axodouble/QUptime/releases   (push-mirror fallback)
+#
+# Idempotent — re-running upgrades the binary and refreshes the unit
+# without touching the data directory.
 set -euo pipefail
 
 INSTALL_BIN="/usr/local/bin/qu"
@@ -15,8 +20,15 @@ SERVICE_NAME="$(basename "$SERVICE_FILE")"
 SERVICE_USER="quptime"
 SERVICE_GROUP="quptime"
 DATA_DIR="/etc/quptime"
-REPO_API="https://git.cer.sh/api/v1/repos/axodouble/quptime/releases/latest"
-RELEASE_BASE="https://git.cer.sh/axodouble/quptime/releases/download"
+
+# Release sources, in preference order. Each row is:
+#   <name>|<latest-release API endpoint>|<release-asset base URL>
+# The asset URL is concatenated with `/<tag>/<filename>`. Adjust here
+# if the project moves hosts.
+SOURCES=(
+    "gitea|https://git.cer.sh/api/v1/repos/axodouble/quptime/releases/latest|https://git.cer.sh/axodouble/quptime/releases/download"
+    "github|https://api.github.com/repos/Axodouble/QUptime/releases/latest|https://github.com/Axodouble/QUptime/releases/download"
+)
 
 fail() {
     echo "Error: $*" >&2
@@ -38,6 +50,51 @@ write_completion() {
     return 1
 }
 
+# fetch_from_source tries one release source end-to-end: pulls the
+# latest tag from its API, downloads the per-arch binary and the
+# accompanying SHA256SUMS, and verifies the checksum. Returns 0 on
+# success (with RELEASE and BINARY_NAME set as globals) or 1 if any
+# step fails — callers can then try the next source. Stderr is kept
+# quiet so a failed primary doesn't spam the operator before the
+# fallback is attempted.
+fetch_from_source() {
+    local api_url=$1
+    local release_base=$2
+    local tmpdir=$3
+
+    local release
+    release=$(curl -fsSL --proto '=https' --tlsv1.2 "$api_url" 2>/dev/null | jq -r '.tag_name' 2>/dev/null) \
+        || return 1
+    [ -n "$release" ] && [ "$release" != "null" ] || return 1
+
+    local binary_name="qu-${release}-linux-${ARCH}"
+    local binary_url="${release_base}/${release}/${binary_name}"
+    local sums_url="${release_base}/${release}/SHA256SUMS"
+
+    curl -fsSL --proto '=https' --tlsv1.2 -o "$tmpdir/$binary_name" "$binary_url" 2>/dev/null \
+        || return 1
+    curl -fsSL --proto '=https' --tlsv1.2 -o "$tmpdir/SHA256SUMS" "$sums_url" 2>/dev/null \
+        || return 1
+
+    # Verify against the SHA256SUMS that came from the same source as
+    # the binary. Never mix sources here — verifying a GitHub-hosted
+    # binary against a Gitea-hosted SHA256SUMS would defeat the
+    # tamper check.
+    (
+        cd "$tmpdir"
+        if ! grep -E "[[:space:]]\\*?${binary_name}\$" SHA256SUMS > expected.sum; then
+            exit 1
+        fi
+        if ! sha256sum -c expected.sum >/dev/null 2>&1; then
+            exit 1
+        fi
+    ) || return 1
+
+    RELEASE="$release"
+    BINARY_NAME="$binary_name"
+    return 0
+}
+
 require_command curl
 require_command jq
 require_command sha256sum
@@ -55,44 +112,39 @@ if [ ! -w "$(dirname "$INSTALL_BIN")" ]; then
     fail "Cannot write to $(dirname "$INSTALL_BIN"). Run this script with sudo, or set INSTALL_BIN to a writable location."
 fi
 
-# --- latest release tag -------------------------------------------------
-RELEASE=$(curl -fsSL "$REPO_API" | jq -r '.tag_name')
-[ -n "$RELEASE" ] && [ "$RELEASE" != "null" ] \
-    || fail "could not determine the latest release tag from $REPO_API"
-
-BINARY_NAME="qu-${RELEASE}-linux-${ARCH}"
-BINARY_URL="${RELEASE_BASE}/${RELEASE}/${BINARY_NAME}"
-SUMS_URL="${RELEASE_BASE}/${RELEASE}/SHA256SUMS"
-
-# --- download + verify --------------------------------------------------
-# Stage in a temp dir so a failed verification never leaves a partial
-# or unverified binary on disk.
+# --- download + verify (with fallback) ----------------------------------
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
-echo "> downloading $BINARY_NAME"
-curl -fsSL --proto '=https' --tlsv1.2 -o "$TMPDIR/$BINARY_NAME" "$BINARY_URL"
-echo "> downloading SHA256SUMS"
-curl -fsSL --proto '=https' --tlsv1.2 -o "$TMPDIR/SHA256SUMS" "$SUMS_URL"
+# Globals filled in by fetch_from_source on success.
+RELEASE=""
+BINARY_NAME=""
+INSTALLED_FROM=""
+INSTALLED_TMP=""
 
-echo "> verifying checksum"
-# Pull just our binary's entry so sha256sum -c doesn't fail on the
-# arches we didn't download.
-(
-    cd "$TMPDIR"
-    if ! grep -E "[[:space:]]\\*?${BINARY_NAME}\$" SHA256SUMS > expected.sum; then
-        fail "no entry for $BINARY_NAME in published SHA256SUMS — refusing to install"
+for source_spec in "${SOURCES[@]}"; do
+    IFS='|' read -r src_name src_api src_base <<<"$source_spec"
+    src_tmp="$TMPDIR/$src_name"
+    mkdir -p "$src_tmp"
+    echo "> trying release source: $src_name"
+    # `set -e` would abort the whole script the moment fetch_from_source
+    # returns nonzero; we want the loop to fall through to the next
+    # source instead. Wrap the call so a failure is just data.
+    if fetch_from_source "$src_api" "$src_base" "$src_tmp"; then
+        INSTALLED_FROM="$src_name"
+        INSTALLED_TMP="$src_tmp"
+        echo "> $src_name: ${RELEASE} ✓ checksum OK"
+        break
     fi
-    if ! sha256sum -c expected.sum >/dev/null 2>&1; then
-        echo "expected: $(awk '{print $1}' expected.sum)"
-        echo "actual:   $(sha256sum "$BINARY_NAME" | awk '{print $1}')"
-        fail "checksum mismatch for $BINARY_NAME — refusing to install"
-    fi
-)
-echo "> checksum OK"
+    echo "> $src_name: unavailable"
+done
 
-install -m 0755 "$TMPDIR/$BINARY_NAME" "$INSTALL_BIN"
-echo "> qu ${RELEASE} installed to $INSTALL_BIN"
+if [ -z "$INSTALLED_FROM" ]; then
+    fail "no release source reachable — tried: $(printf '%s ' "${SOURCES[@]%%|*}"). Check network access to git.cer.sh and github.com."
+fi
+
+install -m 0755 "$INSTALLED_TMP/$BINARY_NAME" "$INSTALL_BIN"
+echo "> qu ${RELEASE} installed to $INSTALL_BIN (source: $INSTALLED_FROM)"
 
 # --- shell completions --------------------------------------------------
 if "$INSTALL_BIN" --help 2>/dev/null | grep -q "completion"; then

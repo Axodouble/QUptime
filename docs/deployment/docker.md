@@ -7,11 +7,26 @@ daemon can bind privileged ports and open ICMP sockets; override with
 
 ## Image references
 
+The same multi-arch (amd64 + arm64) image is published to two
+registries. **The Gitea registry is the canonical source** — it also
+publishes canary `:master` builds on every branch push. GHCR is a
+tag-only push-mirror for users who can't reach `git.cer.sh`.
+
+Primary — Gitea registry:
+
 ```
 git.cer.sh/axodouble/quptime:master          # tip of main, multi-arch
 git.cer.sh/axodouble/quptime:latest          # latest tagged release
 git.cer.sh/axodouble/quptime:v0.0.1          # specific tagged release
 git.cer.sh/axodouble/quptime:latest-amd64    # single-arch (if you must pin)
+```
+
+Fallback — GitHub Container Registry:
+
+```
+ghcr.io/axodouble/quptime:latest             # latest tagged release
+ghcr.io/axodouble/quptime:v0.0.1             # specific tagged release
+ghcr.io/axodouble/quptime:0.0                # latest patch in the 0.0 minor line
 ```
 
 The image embeds `QUPTIME_DIR=/etc/quptime` and declares it a volume —

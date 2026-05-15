@@ -44,10 +44,13 @@ Initial public release.
   `quptime` user, `ProtectSystem=strict`, all capabilities dropped by
   default.
 - **Multi-arch Docker images** (`linux/amd64`, `linux/arm64`)
-  published to `git.cer.sh/axodouble/quptime`.
+  published to `git.cer.sh/axodouble/quptime` (primary) and
+  `ghcr.io/axodouble/quptime` (GitHub push-mirror) on every tag.
 - **Static Linux binaries** (`amd64`, `arm64`) published per tag with
-  a `SHA256SUMS` file; the official installer verifies the checksum
-  before placing the binary on disk.
+  a `SHA256SUMS` file to both Gitea Releases (primary) and GitHub
+  Releases (mirror). The official installer prefers Gitea, falls back
+  to GitHub on failure, and verifies the checksum before placing the
+  binary on disk.
 
 ### Security
 
