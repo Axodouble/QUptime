@@ -16,6 +16,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Default file names. Callers should always go through DataDir() so an
@@ -55,9 +56,33 @@ func DataDir() string {
 }
 
 // SocketPath returns the unix socket used for local CLI ↔ daemon control.
+//
+// Resolution order:
+//  1. $QUPTIME_SOCKET — explicit operator override
+//  2. $RUNTIME_DIRECTORY — set by systemd when the unit declares
+//     RuntimeDirectory=quptime. This is the path that matters in
+//     practice: with User=quptime + PrivateTmp=true, the daemon's
+//     /tmp is namespaced and invisible to the root CLI shell, so a
+//     /tmp fallback yields "no such file" even though the daemon is
+//     happily listening. Anchoring on $RUNTIME_DIRECTORY puts the
+//     socket at /run/quptime/quptime.sock, which is the same inode
+//     the root-CLI default (/var/run/quptime/…) reaches via the
+//     /var/run → /run symlink.
+//  3. /var/run/quptime/… when euid is 0 (CLI side, packaged installs)
+//  4. $XDG_RUNTIME_DIR/quptime/… for user-mode installs
+//  5. /tmp/quptime-<user>/… as a last resort
 func SocketPath() string {
 	if v := os.Getenv("QUPTIME_SOCKET"); v != "" {
 		return v
+	}
+	if v := os.Getenv("RUNTIME_DIRECTORY"); v != "" {
+		// systemd may pass multiple colon-separated entries when more
+		// than one RuntimeDirectory= is declared. Ours is single, but
+		// be defensive in case a future unit adds more.
+		if i := strings.IndexByte(v, ':'); i >= 0 {
+			v = v[:i]
+		}
+		return filepath.Join(v, SocketName)
 	}
 	if os.Geteuid() == 0 {
 		return "/var/run/quptime/" + SocketName
