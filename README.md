@@ -320,7 +320,7 @@ Available template variables:
 | `{{.Check.ID}}`         | UUID                                       |
 | `{{.From}}`             | previous state (`up` / `down` / `unknown`) |
 | `{{.To}}`               | new state                                  |
-| `{{.Verb}}`             | `UP` / `DOWN` / `RECOVERED`                |
+| `{{.Verb}}`             | `UP` / `DOWN` / `RECOVERED` (see note below) |
 | `{{.VerbLower}}`        | lowercase form (`up` / `down` / `recovered`) |
 | `{{.Snapshot.Reports}}` | total per-node reports counted             |
 | `{{.Snapshot.OKCount}}` | how many reported OK                       |
@@ -328,6 +328,17 @@ Available template variables:
 | `{{.Snapshot.Detail}}`  | first failure detail string                |
 | `{{.NodeID}}`           | master that dispatched                     |
 | `{{.When}}`             | RFC3339 timestamp                          |
+
+**When does `UP` fire vs. `RECOVERED`?** Every check starts in the
+`unknown` state. The first time the cluster agrees a check is healthy,
+`unknown → up` fires with `Verb = UP` — this is the "we've never seen
+this check work before" announcement, typically only at first startup
+or right after a check is added. Once the check has ever been `down`,
+the recovery transition is `down → up` and fires with `Verb =
+RECOVERED` instead. So in normal day-to-day operation you'll see
+`DOWN` and `RECOVERED` pairs; `UP` is the one-shot initial-health
+notice and is not re-emitted when a service comes back from an
+outage.
 
 The same variable list is surfaced in-app: `qu alert add smtp --help`,
 `qu alert add discord --help`, and `qu alert edit --help` each print
