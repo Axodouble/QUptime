@@ -5,7 +5,7 @@
 # is being assembled for (TARGETOS/TARGETARCH). Keeps multi-arch
 # builds fast — only the final link is per-arch, the Go toolchain is
 # always native.
-FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG VERSION=dev
@@ -19,11 +19,11 @@ RUN go mod download
 COPY . .
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build \
-      -trimpath \
-      -ldflags "-s -w -X main.version=${VERSION}" \
-      -o /out/qu \
-      ./cmd/qu
+  go build \
+  -trimpath \
+  -ldflags "-s -w -X main.version=${VERSION}" \
+  -o /out/qu \
+  ./cmd/qu
 
 # Runtime stage. distroless/static has CA roots for HTTPS probes and
 # nothing else — no shell, no package manager. Runs as root so the
