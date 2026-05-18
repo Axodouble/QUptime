@@ -4,6 +4,38 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [unreleased]
+
+### Added
+
+- **Pre-deployment enrollment tokens** (`qu enroll create / list /
+  approve / revoke / join`). Replace the shared `cluster_secret`
+  model with single-use, time-limited, per-token credentials. Trust
+  is acquired from both sides: the joiner verifies the cluster's
+  TLS fingerprint baked into the token before submitting, and the
+  cluster either auto-approves (`--auto-approve`) or requires
+  `qu enroll approve <id>` to commit the new peer. Pending
+  enrollments live in `cluster.yaml.pending_enrollments`; only the
+  sha256 hash of each token's secret is persisted.
+
+### Changed
+
+- **`Enroll` RPC** is the new bootstrap method untrusted peers may
+  call. The legacy `Join` RPC is preserved but now returns a
+  deprecation error pointing at `qu enroll` — there is no longer
+  any cluster-secret path through which a new node can be added.
+- **`node.yaml.cluster_secret` and `QUPTIME_CLUSTER_SECRET`** are
+  ignored. The daemon blanks any leftover value from `node.yaml`
+  on first start after upgrade.
+
+### Removed
+
+- **`qu node add`** (the TOFU + cluster-secret invite). Replaced by
+  the `qu enroll` family. The command remains registered as a
+  deprecation stub that prints the replacement.
+- **`qu init --secret`** flag, and the auto-generated cluster-secret
+  print on bootstrap.
+
 ## [v0.1.2] — 2026-05-18
 
 ### Changed
