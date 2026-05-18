@@ -6,8 +6,15 @@ recipe for exposing TCP/9901 directly to the open internet without
 losing sleep.
 
 The short version: `qu` is designed for this — every inbound call is
-mTLS-pinned at the application layer and gated by the cluster secret
-— but defence in depth is cheap and you should take it.
+mTLS-pinned at the application layer and the only RPC an untrusted
+caller can invoke is `Enroll`, which requires a single-use
+pre-deployment token whose hash is the only thing that lives in
+`cluster.yaml`. But defence in depth is cheap and you should take it.
+
+> Older revisions of this page referenced a shared `cluster_secret` in
+> `node.yaml`. That field has been retired; the daemon ignores it and
+> blanks it on first start. New nodes enrol via tokens minted with
+> `qu enroll create`. See [../security.md](../security.md).
 
 ## Threat model in one paragraph
 
