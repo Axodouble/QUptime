@@ -147,20 +147,23 @@ Note: the daemon doesn't currently log the *peer address* on rejected
 joins. The log filter above is illustrative; check what your version
 actually emits before relying on it.
 
-## Secret hygiene
+## Token hygiene
 
-The single most important thing on a public-internet deployment:
+There is no cluster-wide secret to leak — each new host is enrolled
+with a single-use token minted on demand. The rules:
 
-- **Generate the secret on the first node.** `qu init` with no
-  `--secret` produces 32 random bytes from `crypto/rand`, base64-
-  encoded. Don't replace that with something memorable.
-- **Transport out of band.** Paste it into your secret manager
-  immediately; share via 1Password / Vault / encrypted email.
-- **Rotate if anyone with access has left.** Rotation isn't a CLI
-  command; do it the brute-force way: `qu init` a fresh cluster on
-  new ports, re-add every check via `cluster.yaml` export, swap DNS.
-- **One secret per cluster.** Do not reuse the secret across staging
-  and prod, or across customers if you run several clusters.
+- **Mint with the shortest viable TTL.** `qu enroll create --ttl 15m`
+  is enough for an Ansible run; don't leave hour-long tokens lying
+  around. Default is 1h, max is 168h.
+- **Transport out of band.** Paste the token into your secret
+  manager or pipe it directly into the new host's stdin; don't
+  email it.
+- **Revoke unused tokens.** `qu enroll list` shows outstanding
+  tokens; `qu enroll revoke <id>` drops one before it expires.
+- **Approve interactively in shared clusters.** Drop `--auto-approve`
+  if more than one operator can mint tokens — a second human running
+  `qu enroll approve` after seeing the joiner's NodeID is a useful
+  audit checkpoint.
 
 ## Non-default ports
 
@@ -180,8 +183,10 @@ cluster doesn't require uniform ports across nodes; each peer's
   unstable. Could be benign, could be a probe attempt.
 - The firewall drop counter on the `quptime-drop` rule above.
 - The number of TLS handshakes on `:9901`. A spike in handshakes that
-  don't progress to a successful RPC is the signature of a brute-force
-  on the cluster secret.
+  don't progress to a successful RPC is the signature of an enrollment
+  brute-force — but unlike the old cluster-secret model, a brute-force
+  must hit a *currently outstanding* token, so keep TTLs short and
+  revoke aggressively.
 
 For the operational side — backups, upgrades, recovery — see
 [operations.md](../operations.md).
