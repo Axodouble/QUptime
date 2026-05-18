@@ -33,6 +33,7 @@ const (
 	CtrlTrustList     = "trust.list"
 	CtrlTrustRemove   = "trust.remove"
 	CtrlAlertTest     = "alert.test"
+	CtrlCheckTest     = "check.test"
 	CtrlEnrollCreate  = "enroll.create"
 	CtrlEnrollList    = "enroll.list"
 	CtrlEnrollApprove = "enroll.approve"
@@ -66,6 +67,13 @@ type MutateResult struct {
 // AlertTestBody is the payload of CtrlAlertTest.
 type AlertTestBody struct {
 	AlertID string `json:"alert_id"`
+}
+
+// CheckTestBody is the payload of CtrlCheckTest. State is one of
+// "down", "up", "recovered" (empty defaults to "down").
+type CheckTestBody struct {
+	CheckID string `json:"check_id"`
+	State   string `json:"state,omitempty"`
 }
 
 // NodeRemoveBody / TrustRemoveBody share the same shape.
@@ -265,6 +273,16 @@ func (c *controlServer) dispatch(ctx context.Context, req CtrlRequest) CtrlRespo
 			return fail(err)
 		}
 		if err := c.d.dispatcher.Test(body.AlertID); err != nil {
+			return fail(err)
+		}
+		return ok(map[string]string{"status": "sent"})
+
+	case CtrlCheckTest:
+		var body CheckTestBody
+		if err := json.Unmarshal(req.Body, &body); err != nil {
+			return fail(err)
+		}
+		if err := c.d.dispatcher.TestCheck(body.CheckID, body.State); err != nil {
 			return fail(err)
 		}
 		return ok(map[string]string{"status": "sent"})
