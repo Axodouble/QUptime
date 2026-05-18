@@ -18,10 +18,10 @@ The canonical home is Gitea; the repo is push-mirrored to GitHub on
 every tag. Releases and multi-arch container images are published to
 both.
 
-| Source           | Releases                                                     | Container image                  |
-| ---------------- | ------------------------------------------------------------ | -------------------------------- |
-| Gitea (primary)  | <https://git.cer.sh/axodouble/quptime/releases>              | `git.cer.sh/axodouble/quptime`   |
-| GitHub (mirror)  | <https://github.com/Axodouble/QUptime/releases>              | `ghcr.io/axodouble/quptime`      |
+| Source          | Releases                                        | Container image                |
+| --------------- | ----------------------------------------------- | ------------------------------ |
+| Gitea (primary) | <https://git.cer.sh/axodouble/quptime/releases> | `git.cer.sh/axodouble/quptime` |
+| GitHub (mirror) | <https://github.com/Axodouble/QUptime/releases> | `ghcr.io/axodouble/quptime`    |
 
 One-step install — tries Gitea first, falls back to GitHub automatically:
 
@@ -57,17 +57,17 @@ on truth. If one of them loses its uplink, the rest keep alerting.
 This README is the quick-start. For production use, the longer guides
 live under [`docs/`](docs/README.md):
 
-| If you want to…                                       | Read                                                               |
-| ----------------------------------------------------- | ------------------------------------------------------------------ |
-| understand the consensus / replication model          | [docs/architecture.md](docs/architecture.md)                       |
-| reference every field in `node.yaml` / `cluster.yaml` | [docs/configuration.md](docs/configuration.md)                     |
-| deploy on Linux with systemd hardening                | [docs/deployment/systemd.md](docs/deployment/systemd.md)           |
-| deploy with Docker / docker-compose                   | [docs/deployment/docker.md](docs/deployment/docker.md)             |
-| deploy over Tailscale or WireGuard                    | [docs/deployment/tailscale.md](docs/deployment/tailscale.md)       |
+| If you want to…                                       | Read                                                                     |
+| ----------------------------------------------------- | ------------------------------------------------------------------------ |
+| understand the consensus / replication model          | [docs/architecture.md](docs/architecture.md)                             |
+| reference every field in `node.yaml` / `cluster.yaml` | [docs/configuration.md](docs/configuration.md)                           |
+| deploy on Linux with systemd hardening                | [docs/deployment/systemd.md](docs/deployment/systemd.md)                 |
+| deploy with Docker / docker-compose                   | [docs/deployment/docker.md](docs/deployment/docker.md)                   |
+| deploy over Tailscale or WireGuard                    | [docs/deployment/tailscale.md](docs/deployment/tailscale.md)             |
 | expose `qu` on the open internet safely               | [docs/deployment/public-internet.md](docs/deployment/public-internet.md) |
-| upgrade, back up, or recover from failures            | [docs/operations.md](docs/operations.md)                           |
-| understand the trust model and rotate identities      | [docs/security.md](docs/security.md)                               |
-| diagnose a misbehaving cluster                        | [docs/troubleshooting.md](docs/troubleshooting.md)                 |
+| upgrade, back up, or recover from failures            | [docs/operations.md](docs/operations.md)                                 |
+| understand the trust model and rotate identities      | [docs/security.md](docs/security.md)                                     |
+| diagnose a misbehaving cluster                        | [docs/troubleshooting.md](docs/troubleshooting.md)                       |
 
 ## Architecture
 
@@ -288,17 +288,17 @@ every two seconds.
 
 Keybindings:
 
-| Key                 | Action                                                    |
-| ------------------- | --------------------------------------------------------- |
-| `↑` / `↓`           | move cursor within a tab                                  |
-| `Tab` / `Shift+Tab` | next / previous tab                                       |
-| `1` / `2` / `3`     | jump to Peers / Checks / Alerts                           |
-| `r`                 | force-refresh                                             |
-| `a`                 | add (opens a picker on Checks/Alerts; node form on Peers) |
-| `d`                 | remove the selected row (confirmation prompt)             |
+| Key                 | Action                                                                                     |
+| ------------------- | ------------------------------------------------------------------------------------------ |
+| `↑` / `↓`           | move cursor within a tab                                                                   |
+| `Tab` / `Shift+Tab` | next / previous tab                                                                        |
+| `1` / `2` / `3`     | jump to Peers / Checks / Alerts                                                            |
+| `r`                 | force-refresh                                                                              |
+| `a`                 | add (opens a picker on Checks/Alerts; node form on Peers)                                  |
+| `d`                 | remove the selected row (confirmation prompt)                                              |
 | `t`                 | fire a test transition: synthetic test message on Alerts; pick down/up/recovered on Checks |
-| `D`                 | toggle the selected alert's `default` flag                |
-| `q` / `Ctrl+C`      | quit                                                      |
+| `D`                 | toggle the selected alert's `default` flag                                                 |
+| `q` / `Ctrl+C`      | quit                                                                                       |
 
 Forms run the same control-plane methods the CLI does, so any side
 effect (a mutation, a node add, an alert test) ends up routed through
@@ -325,22 +325,22 @@ qu alert add smtp ops --host ... --from ... --to ... \
 
 Available template variables:
 
-| Variable                | Meaning                                    |
-| ----------------------- | ------------------------------------------ |
-| `{{.Check.Name}}`       | check name                                 |
-| `{{.Check.Type}}`       | `http` / `tcp` / `icmp`                    |
-| `{{.Check.Target}}`     | URL or host:port being probed              |
-| `{{.Check.ID}}`         | UUID                                       |
-| `{{.From}}`             | previous state (`up` / `down` / `unknown`) |
-| `{{.To}}`               | new state                                  |
+| Variable                | Meaning                                      |
+| ----------------------- | -------------------------------------------- |
+| `{{.Check.Name}}`       | check name                                   |
+| `{{.Check.Type}}`       | `http` / `tcp` / `icmp`                      |
+| `{{.Check.Target}}`     | URL or host:port being probed                |
+| `{{.Check.ID}}`         | UUID                                         |
+| `{{.From}}`             | previous state (`up` / `down` / `unknown`)   |
+| `{{.To}}`               | new state                                    |
 | `{{.Verb}}`             | `UP` / `DOWN` / `RECOVERED` (see note below) |
 | `{{.VerbLower}}`        | lowercase form (`up` / `down` / `recovered`) |
-| `{{.Snapshot.Reports}}` | total per-node reports counted             |
-| `{{.Snapshot.OKCount}}` | how many reported OK                       |
-| `{{.Snapshot.NotOK}}`   | how many reported failure                  |
-| `{{.Snapshot.Detail}}`  | first failure detail string                |
-| `{{.NodeID}}`           | master that dispatched                     |
-| `{{.When}}`             | RFC3339 timestamp                          |
+| `{{.Snapshot.Reports}}` | total per-node reports counted               |
+| `{{.Snapshot.OKCount}}` | how many reported OK                         |
+| `{{.Snapshot.NotOK}}`   | how many reported failure                    |
+| `{{.Snapshot.Detail}}`  | first failure detail string                  |
+| `{{.NodeID}}`           | master that dispatched                       |
+| `{{.When}}`             | RFC3339 timestamp                            |
 
 **When does `UP` fire vs. `RECOVERED`?** Every check starts in the
 `unknown` state. The first time the cluster agrees a check is healthy,
@@ -534,7 +534,7 @@ qu alert add discord <name> --webhook …                                       
 qu alert list / remove / test <id-or-name>
 qu alert default <id-or-name> on|off            toggle default attachment to every check
 qu trust list / remove <node-id>
-qu update [--check] [--force] [--source gitea|github]   replace this binary with the latest release
+qu update [--check] [--force] [--source gitea|github] [--beta]   replace this binary with the latest release
 ```
 
 All `--interval` and `--timeout` flags accept Go duration syntax: `5s`,
