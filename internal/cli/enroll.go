@@ -201,22 +201,22 @@ form quorum.`,
 
 // runEnrollJoin orchestrates the joiner side of the dance.
 //
-// 1. Refuse if node.yaml already exists (we'd overwrite identity).
-// 2. Decode the token; check it isn't already expired client-side.
-// 3. bootstrapNode generates the local identity, keypair, and
-//    self-signed cert. This populates node.yaml + keys/ but does NOT
-//    seed cluster.yaml from a stale source — we'll get the cluster
-//    snapshot from the cluster's response.
-// 4. For each cluster endpoint in the token: TOFU-fetch the peer's
-//    cert and check fingerprint == token's expected fingerprint. The
-//    first match wins.
-// 5. Confirm with the operator (skip with --yes).
-// 6. Add the verified peer to the local trust store so transport.Client
-//    can dial it on the normal (trusted) path.
-// 7. Submit EnrollRequest. On Accepted, persist every returned peer
-//    into the trust store. On Pending, we already trust the bootstrap
-//    peer; that's enough for `qu serve` to catch up via heartbeats
-//    once approval lands.
+//  1. Refuse if node.yaml already exists (we'd overwrite identity).
+//  2. Decode the token; check it isn't already expired client-side.
+//  3. bootstrapNode generates the local identity, keypair, and
+//     self-signed cert. This populates node.yaml + keys/ but does NOT
+//     seed cluster.yaml from a stale source — we'll get the cluster
+//     snapshot from the cluster's response.
+//  4. For each cluster endpoint in the token: TOFU-fetch the peer's
+//     cert and check fingerprint == token's expected fingerprint. The
+//     first match wins.
+//  5. Confirm with the operator (skip with --yes).
+//  6. Add the verified peer to the local trust store so transport.Client
+//     can dial it on the normal (trusted) path.
+//  7. Submit EnrollRequest. On Accepted, persist every returned peer
+//     into the trust store. On Pending, we already trust the bootstrap
+//     peer; that's enough for `qu serve` to catch up via heartbeats
+//     once approval lands.
 func runEnrollJoin(ctx context.Context, cmd *cobra.Command, tokenStr, advertise, bindAddr string, bindPort int, yes bool) error {
 	out := cmd.OutOrStdout()
 
@@ -330,13 +330,28 @@ func runEnrollJoin(ctx context.Context, cmd *cobra.Command, tokenStr, advertise,
 		return fmt.Errorf("cluster rejected enrollment: %s", resp.Error)
 	}
 
+	// Seed the joiner's cluster.yaml with at least the bootstrap peer
+	// so `qu serve` has someone to heartbeat with. Without this, the
+	// quorum manager would only see self (from bootstrapNode's seed)
+	// and never reach out to the cluster — the joiner would sit dark
+	// forever even after operator approval.
+	bootstrapPeer := config.PeerInfo{
+		NodeID:      peerNodeID,
+		Advertise:   boundEndpoint.Advertise,
+		Fingerprint: bootstrapCert.Fingerprint,
+		CertPEM:     string(bootstrapCert.CertPEM),
+	}
+
 	if resp.Pending {
+		if err := seedJoinerClusterYaml(nodeCfg, myCertPEM, []config.PeerInfo{bootstrapPeer}); err != nil {
+			fmt.Fprintf(out, "warn: seed cluster.yaml: %v\n", err)
+		}
 		fmt.Fprintln(out)
 		fmt.Fprintln(out, "enrollment submitted; waiting for cluster-side approval.")
 		fmt.Fprintln(out, "the cluster operator should run:")
 		fmt.Fprintf(out, "    qu enroll approve %s\n", payload.ID)
-		fmt.Fprintln(out, "then start the daemon on this node with `qu serve`. heartbeats will")
-		fmt.Fprintln(out, "pick up the rest of the cluster automatically once approved.")
+		fmt.Fprintln(out, "you can start `qu serve` now or after approval — the daemon will")
+		fmt.Fprintln(out, "fail to form quorum until approval lands and then catch up via heartbeats.")
 		return nil
 	}
 
@@ -344,6 +359,10 @@ func runEnrollJoin(ctx context.Context, cmd *cobra.Command, tokenStr, advertise,
 		return errors.New("cluster returned neither accepted nor pending")
 	}
 
+	// Auto-approved path: persist trust entries for every existing
+	// peer the cluster handed back, and seed cluster.yaml so quorum
+	// management has the full peer list immediately on `qu serve`.
+	peers := []config.PeerInfo{bootstrapPeer}
 	added := 0
 	for _, p := range transport.EnrollSummaryPeers(resp.Cluster) {
 		fp, err := crypto.FingerprintFromCertPEM([]byte(p.CertPEM))
@@ -360,13 +379,62 @@ func runEnrollJoin(ctx context.Context, cmd *cobra.Command, tokenStr, advertise,
 			fmt.Fprintf(out, "warn: trust add %s: %v\n", p.NodeID, err)
 			continue
 		}
+		if p.NodeID != bootstrapPeer.NodeID {
+			peers = append(peers, config.PeerInfo{
+				NodeID:      p.NodeID,
+				Advertise:   p.Advertise,
+				Fingerprint: p.Fingerprint,
+				CertPEM:     p.CertPEM,
+			})
+		}
 		added++
+	}
+	if err := seedJoinerClusterYaml(nodeCfg, myCertPEM, peers); err != nil {
+		fmt.Fprintf(out, "warn: seed cluster.yaml: %v\n", err)
 	}
 
 	fmt.Fprintln(out)
 	fmt.Fprintf(out, "enrollment accepted — trusted %d existing cluster peer(s)\n", added)
 	fmt.Fprintln(out, "next: `qu serve` (or restart the systemd unit if installed)")
 	return nil
+}
+
+// seedJoinerClusterYaml rewrites the joiner's local cluster.yaml so
+// it carries self + every peer the joiner has learned about. Without
+// this the quorum manager would only know about self (from
+// bootstrapNode's seed) and never heartbeat outward, leaving the new
+// node permanently disconnected from the cluster.
+//
+// The on-disk version is bumped from whatever bootstrapNode wrote
+// (Version=1) so the file is recognisably "post-enrolment" — the
+// first real broadcast from master (whatever version it carries)
+// will still supersede it because Replace gates on strict-greater.
+func seedJoinerClusterYaml(nodeCfg *config.NodeConfig, myCertPEM []byte, peers []config.PeerInfo) error {
+	selfFP, err := crypto.FingerprintFromCertPEM(myCertPEM)
+	if err != nil {
+		return err
+	}
+	cluster, err := config.LoadClusterConfig()
+	if err != nil {
+		return err
+	}
+	return cluster.Mutate(nodeCfg.NodeID, func(c *config.ClusterConfig) error {
+		c.Peers = []config.PeerInfo{{
+			NodeID:      nodeCfg.NodeID,
+			Advertise:   nodeCfg.AdvertiseAddr(),
+			Fingerprint: selfFP,
+			CertPEM:     string(myCertPEM),
+		}}
+		seen := map[string]bool{nodeCfg.NodeID: true}
+		for _, p := range peers {
+			if seen[p.NodeID] {
+				continue
+			}
+			c.Peers = append(c.Peers, p)
+			seen[p.NodeID] = true
+		}
+		return nil
+	})
 }
 
 func printEnrollCreateResult(w io.Writer, res daemon.EnrollCreateResult) {

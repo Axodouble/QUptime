@@ -524,9 +524,15 @@ func newAddNodeForm() *form {
 			if res.AutoApprove {
 				approval = "auto"
 			}
+			// The token is the long base64 string the joiner runs. It
+			// is only available at create time (cluster.yaml stores
+			// just the hash), so we surface the full command in the
+			// flash — wrapping is fine, the user copies the whole
+			// line. They can always revoke with `qu enroll revoke
+			// <id>` if they typoed something.
 			return modalDone{
-				flash: fmt.Sprintf("enrollment %s created (%s, expires in %s) — run `qu enroll list` to copy the token",
-					res.ID, approval, time.Until(res.ExpiresAt).Round(time.Second)),
+				flash: fmt.Sprintf("token %s created (%s, expires in %s). run on the new host:\n  qu enroll join %s",
+					res.ID, approval, time.Until(res.ExpiresAt).Round(time.Second), res.Token),
 				level: flashInfo,
 			}
 		}
