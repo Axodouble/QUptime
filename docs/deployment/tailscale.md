@@ -10,13 +10,6 @@ This page focuses on Tailscale because the repo ships an example
 compose for it, but everything generalises to WireGuard, Nebula, or a
 self-hosted Headscale.
 
-> **Note on cluster joining.** Where this page references a "cluster
-> secret", the daemon has been switched to pre-deployment enrollment
-> tokens (`qu enroll create` / `qu enroll join`). The overlay still
-> provides exactly the same defence-in-depth — the security argument
-> only changes in that there is no longer a single cluster-wide
-> secret to leak. See [../security.md](../security.md).
-
 ## The big idea
 
 ```
@@ -33,8 +26,8 @@ self-hosted Headscale.
 ```
 
 `bind_addr` is set to the tailscale IP, the host's public interface
-has no port 9901 open, and the cluster secret + mTLS handshake gate
-the link inside the tunnel.
+has no port 9901 open, and the mTLS handshake plus pre-deployment
+enrollment tokens gate the link inside the tunnel.
 
 ## Compose recipe
 
@@ -65,10 +58,6 @@ services:
       # this node's tailnet IP / MagicDNS name. Auto-init reads this on
       # first start.
       - QUPTIME_ADVERTISE=${QUPTIME_ADVERTISE}
-      # Shared cluster join secret. Omit on the very first node to have
-      # it generated and logged for you, then copy it into every
-      # follower's .env.
-      - QUPTIME_CLUSTER_SECRET=${QUPTIME_CLUSTER_SECRET:-}
     volumes:
       - quptime:/etc/quptime
     network_mode: "service:tailscale"
@@ -90,42 +79,62 @@ Each host runs the same compose file with a per-host `.env`:
 HOST=alpha
 TAILSCALE_AUTHKEY=tskey-auth-xxxxxxxx
 QUPTIME_ADVERTISE=100.64.1.1:9901          # this node's tailnet IP
-# QUPTIME_CLUSTER_SECRET left unset — will be generated on first boot.
 ```
 
 Start the stack on the first host. `qu serve` auto-initialises the
 volume using the env vars above, so a single `docker compose up`
-brings everything up:
+brings everything up as a one-node cluster:
 
 ```sh
 docker compose up -d
-docker compose logs quptime | grep -A1 'cluster secret'
-# Pipe the secret through your password manager.
 ```
 
-On every **other** host, write the same `.env` plus the captured
-secret:
+For each follower, mint an enrollment token from the running cluster
+(here from alpha) and copy the printed `qu enroll join …` line out
+of band:
 
 ```sh
-# .env (bravo, charlie, …)
+# On alpha:
+docker compose exec quptime qu enroll create --name bravo --auto-approve --ttl 1h
+```
+
+`--auto-approve` skips the manual `qu enroll approve` step on the
+cluster side; drop it if you want a second-operator audit checkpoint.
+Tokens are single-use and time-bound — see
+[../security.md](../security.md) for the threat model.
+
+On every **other** host, write the same `.env` (with that host's own
+tailnet IP) and run the join *before* starting the daemon. The join
+populates the data volume with this node's identity, the bootstrap
+peer's pinned fingerprint, and a seeded `cluster.yaml`; `qu serve`
+then comes up already trusting the cluster.
+
+```sh
+# .env (bravo)
 HOST=bravo
 TAILSCALE_AUTHKEY=tskey-auth-xxxxxxxx
 QUPTIME_ADVERTISE=100.64.1.2:9901
-QUPTIME_CLUSTER_SECRET=<paste from alpha>
 ```
-
-Bring them up and invite them from the first node:
 
 ```sh
+# On bravo:
+docker compose up -d tailscale          # bring up the tailnet first
+docker compose run --rm quptime \
+  qu enroll join <token> --advertise 100.64.1.2:9901 --yes
 docker compose up -d
+```
 
-# From alpha
-docker compose exec quptime qu node add 100.64.1.2:9901
-sleep 3
-docker compose exec quptime qu node add 100.64.1.3:9901
+The `--rm` run shares the same `quptime` named volume as the long-
+running service, so the freshly written `node.yaml`, keys, and
+`cluster.yaml` are picked up the moment `qu serve` starts. From
+alpha:
 
+```sh
 docker compose exec quptime qu status
 ```
+
+should now show two peers (three once charlie is enrolled the same
+way).
 
 ## Tailscale ACLs
 
@@ -160,15 +169,17 @@ The recipe generalises:
 
 1. Provision the overlay interface on each host with a stable
    private IP (the tunnel's own address).
-2. `qu init --advertise <overlay-ip>:9901`.
+2. On the first node: `qu init --advertise <overlay-ip>:9901`. On
+   every subsequent node: `qu enroll join <token> --advertise
+   <overlay-ip>:9901` with a token minted on the first node.
 3. Set `bind_addr: <overlay-ip>` in `node.yaml` so the daemon does
    **not** also listen on the public interface.
 4. Open `:9901` only on the overlay interface in your firewall — for
    nftables that's something like `iifname "wg0" tcp dport 9901
    accept`.
 
-The cluster secret and mTLS fingerprints still apply; the overlay just
-removes the open-internet attack surface.
+mTLS fingerprint pinning still applies; the overlay just removes the
+open-internet attack surface for new-peer enrollment.
 
 ## Why prefer overlay over public exposure
 
@@ -176,9 +187,10 @@ removes the open-internet attack surface.
   exploit in your overlay client (rare; Tailscale and WireGuard are
   small surfaces) still hits the application-layer pinning before any
   cluster-level operation.
-- The cluster secret can be lower-entropy when it's already
-  unreachable from outside. (You should still treat it as a real
-  secret; "defence in depth" only works if every layer is real.)
+- Enrollment tokens are short-lived and single-use, but a brute-force
+  attempt against an outstanding token is still cheap to attempt over
+  the open internet. An overlay makes that surface unreachable in the
+  first place.
 - ICMP probes from a homelab to a target on the public internet are
   trivial through NAT, but ICMP *into* a homelab usually isn't.
   Running `qu` on a tailnet means peers can heartbeat each other

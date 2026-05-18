@@ -5,20 +5,25 @@ The published image is a 14 MB distroless static container with the
 daemon can bind privileged ports and open ICMP sockets; override with
 `--user` if your host doesn't need that.
 
-> **Note on cluster joining.** The shared-cluster-secret model
-> referenced in some snippets below has been replaced by pre-deployment
-> enrollment tokens. Where this page shows `QUPTIME_CLUSTER_SECRET` or
-> scraping a secret from logs, the modern flow is:
->
-> 1. On any existing cluster node: `qu enroll create --auto-approve` →
->    copy the printed `qu enroll join <token>` command.
-> 2. On the new container's host (with the data volume mounted):
->    `docker exec quptime qu enroll join <token> --advertise <addr>`.
->
-> The `QUPTIME_CLUSTER_SECRET` env var is silently ignored by recent
-> daemons; the daemon also clears any `cluster_secret` field it finds
-> in an existing `node.yaml` on first start. See
-> [../security.md](../security.md) for the threat model.
+New nodes join the cluster via single-use pre-deployment enrollment
+tokens — there is no longer a shared cluster secret. The pattern in
+every recipe below is:
+
+1. Bring up the first node with `docker compose up -d`. `qu serve`
+   auto-initialises a one-node cluster from the `QUPTIME_*` env vars.
+2. On that node: `docker compose exec quptime qu enroll create --auto-approve`.
+   Copy the printed `qu enroll join <token>` line out of band.
+3. On each new host, run the join *before* the daemon starts so it
+   sees a pre-populated data dir:
+   ```sh
+   docker compose run --rm quptime qu enroll join <token> \
+     --advertise <this-host:9901> --yes
+   docker compose up -d
+   ```
+
+See [../security.md](../security.md) for the threat model and
+`qu enroll --help` for the rest of the subcommands (`list`, `approve`,
+`revoke`).
 
 ## Image references
 
@@ -62,10 +67,6 @@ services:
       # host:port other nodes use to reach this one. Must be reachable
       # from every peer — the loopback inside the container is useless.
       - QUPTIME_ADVERTISE=<host-ip>:9901
-      # Pre-shared join secret. Omit on the very first node and read
-      # the generated value out of `docker logs quptime`, then set
-      # this env var on every follower before bringing them up.
-      - QUPTIME_CLUSTER_SECRET=${QUPTIME_CLUSTER_SECRET:-}
     ports:
       - "9901:9901"
     volumes:
@@ -89,15 +90,8 @@ docker compose up -d
 docker compose exec quptime qu status
 ```
 
-On the very first node, capture the auto-generated cluster secret:
-
-```sh
-docker compose logs quptime | grep -A1 'cluster secret'
-```
-
-Copy that value into the `QUPTIME_CLUSTER_SECRET` env var of every
-follower before starting them, otherwise their join RPCs will be
-rejected. The full list of accepted env vars lives in
+That is a self-contained one-node cluster. The full list of accepted
+env vars lives in
 [configuration.md](../configuration.md#nodeyaml-field-overrides).
 
 ## Three-node compose on a single host
@@ -118,7 +112,6 @@ services:
     container_name: alpha
     environment:
       - QUPTIME_ADVERTISE=alpha:9901
-      # First node: leave secret unset and read it from `docker logs`.
     ports: ["9901:9901"]
     volumes: ["alpha-data:/etc/quptime"]
 
@@ -127,7 +120,6 @@ services:
     container_name: bravo
     environment:
       - QUPTIME_ADVERTISE=bravo:9901
-      - QUPTIME_CLUSTER_SECRET=${SECRET}
     ports: ["9902:9901"]
     volumes: ["bravo-data:/etc/quptime"]
 
@@ -136,7 +128,6 @@ services:
     container_name: charlie
     environment:
       - QUPTIME_ADVERTISE=charlie:9901
-      - QUPTIME_CLUSTER_SECRET=${SECRET}
     ports: ["9903:9901"]
     volumes: ["charlie-data:/etc/quptime"]
 
@@ -149,24 +140,36 @@ volumes:
 Bootstrap:
 
 ```sh
-# 1. Start alpha first to mint the cluster secret.
+# 1. Start alpha first — it auto-initialises as a one-node cluster.
 docker compose up -d alpha
-# 2. Read the secret off alpha's stdout.
-export SECRET=$(docker compose logs alpha | awk '/cluster secret/{getline; print $1}')
-# 3. Bring up the followers — they pick up the secret from $SECRET.
-docker compose up -d bravo charlie
 
-# Invite from alpha. The hostnames resolve over the compose network.
-docker compose exec alpha qu node add bravo:9901
-sleep 3   # wait for heartbeats before the next add
-docker compose exec alpha qu node add charlie:9901
+# 2. Mint one enrollment token per follower from alpha. --auto-approve
+#    skips the manual `qu enroll approve` step; drop it if you want
+#    a two-operator audit checkpoint.
+TOKEN_BRAVO=$(docker compose exec -T alpha qu enroll create \
+  --name bravo --auto-approve | awk '/qu enroll join/{print $NF}')
+TOKEN_CHARLIE=$(docker compose exec -T alpha qu enroll create \
+  --name charlie --auto-approve | awk '/qu enroll join/{print $NF}')
+
+# 3. Run the join inside each follower's volume BEFORE the daemon
+#    starts. `docker compose run --rm` brings up the container,
+#    runs the one-shot command, and removes it — the named volume
+#    keeps the freshly written node.yaml/keys/cluster.yaml.
+docker compose run --rm bravo qu enroll join "$TOKEN_BRAVO" \
+  --advertise bravo:9901 --yes
+docker compose run --rm charlie qu enroll join "$TOKEN_CHARLIE" \
+  --advertise charlie:9901 --yes
+
+# 4. Now start the followers normally.
+docker compose up -d bravo charlie
 
 docker compose exec alpha qu status
 ```
 
-For a cluster on three separate hosts, replicate the compose file on
-each box with different `advertise` addresses (the public hostname or
-the overlay IP) and bootstrap the same way.
+The hostnames resolve over the compose network. For a cluster on
+three separate hosts, replicate the compose file on each box with
+different `advertise` addresses (the public hostname or the overlay
+IP) and follow the same enroll pattern.
 
 ## Multi-host compose
 
@@ -182,7 +185,6 @@ services:
     restart: unless-stopped
     environment:
       - QUPTIME_ADVERTISE=${QUPTIME_ADVERTISE}        # host:9901 reachable from peers
-      - QUPTIME_CLUSTER_SECRET=${QUPTIME_CLUSTER_SECRET}
     ports:
       - "9901:9901"
     volumes:
@@ -191,9 +193,23 @@ services:
       - NET_RAW
 ```
 
-Put the per-host values (`QUPTIME_ADVERTISE`, `QUPTIME_CLUSTER_SECRET`)
-in a sibling `.env` file or a config-management secret so the compose
-file itself is identical across hosts.
+Put the per-host value (`QUPTIME_ADVERTISE`) in a sibling `.env` file
+so the compose file itself is identical across hosts.
+
+Bootstrap the first host with `docker compose up -d`. For every
+subsequent host, mint a token on the live cluster and join before
+starting the daemon:
+
+```sh
+# On the first host (already running):
+docker compose exec quptime qu enroll create --name bravo --auto-approve
+# → copy the `qu enroll join <token>` line out of band.
+
+# On the new host (data dir empty):
+docker compose run --rm quptime qu enroll join <token> \
+  --advertise bravo.example.com:9901 --yes
+docker compose up -d
+```
 
 Persistence is a bind-mount under `/srv/quptime/data` so backups and
 upgrades hit a known path. See [operations.md](../operations.md) for
