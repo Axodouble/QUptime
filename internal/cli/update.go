@@ -24,6 +24,7 @@ import (
 type releaseSource struct {
 	name        string
 	apiLatest   string
+	apiBeta     string
 	releaseBase string
 }
 
@@ -31,11 +32,13 @@ var updateSources = []releaseSource{
 	{
 		name:        "gitea",
 		apiLatest:   "https://git.cer.sh/api/v1/repos/axodouble/quptime/releases/latest",
+		apiBeta:     "https://git.cer.sh/api/v1/repos/axodouble/quptime/releases", // first object is the actual latest, which may be a pre-release
 		releaseBase: "https://git.cer.sh/axodouble/quptime/releases/download",
 	},
 	{
 		name:        "github",
 		apiLatest:   "https://api.github.com/repos/Axodouble/QUptime/releases/latest",
+		apiBeta:     "https://api.github.com/repos/Axodouble/QUptime/releases", // first object is the actual latest, which may be a pre-release
 		releaseBase: "https://github.com/Axodouble/QUptime/releases/download",
 	},
 }
@@ -45,6 +48,7 @@ func addUpdateCmd(root *cobra.Command) {
 		checkOnly bool
 		force     bool
 		source    string
+		beta      bool
 	)
 
 	cmd := &cobra.Command{
@@ -70,16 +74,19 @@ Run as the user that owns the binary (usually root for the default
 				checkOnly: checkOnly,
 				force:     force,
 				source:    source,
+				beta:      beta,
 			})
 		},
 	}
 	cmd.Flags().BoolVar(&checkOnly, "check", false, "report whether an update is available and exit; do not download or install")
 	cmd.Flags().BoolVar(&force, "force", false, "reinstall even if already on the latest tag")
 	cmd.Flags().StringVar(&source, "source", "", "restrict release source: gitea, github (default: try gitea, fall back to github)")
+	cmd.Flags().BoolVar(&beta, "beta", false, "consider pre-release versions (newest features, also newest bugs)")
 	root.AddCommand(cmd)
 }
 
 type updateOptions struct {
+	beta      bool
 	checkOnly bool
 	force     bool
 	source    string
@@ -107,7 +114,7 @@ func runUpdate(cmd *cobra.Command, opts updateOptions) error {
 	ctx, cancel := context.WithTimeout(cmd.Context(), 2*time.Minute)
 	defer cancel()
 
-	rel, err := fetchLatestRelease(ctx, sources)
+	rel, err := fetchLatestRelease(ctx, sources, opts.beta)
 	if err != nil {
 		return err
 	}
@@ -196,10 +203,21 @@ type resolvedRelease struct {
 // fetchLatestRelease walks the source list and returns the first one
 // whose /releases/latest endpoint hands back a usable tag. Stderr
 // channels failures so the operator can see which source was tried.
-func fetchLatestRelease(ctx context.Context, sources []releaseSource) (resolvedRelease, error) {
+func fetchLatestRelease(ctx context.Context, sources []releaseSource, beta bool) (resolvedRelease, error) {
 	var lastErr error
 	for _, s := range sources {
-		tag, err := fetchTag(ctx, s.apiLatest)
+		var apiEndpoint string
+		if beta {
+			firstURL, err := resolveFirstReleaseURL(ctx, s.apiBeta)
+			if err != nil {
+				lastErr = fmt.Errorf("%s: %w", s.name, err)
+				continue
+			}
+			apiEndpoint = firstURL
+		} else {
+			apiEndpoint = s.apiLatest
+		}
+		tag, err := fetchTag(ctx, apiEndpoint)
 		if err != nil {
 			lastErr = fmt.Errorf("%s: %w", s.name, err)
 			continue
@@ -210,6 +228,27 @@ func fetchLatestRelease(ctx context.Context, sources []releaseSource) (resolvedR
 		lastErr = errors.New("no sources configured")
 	}
 	return resolvedRelease{}, fmt.Errorf("no release source reachable: %w", lastErr)
+}
+
+func resolveFirstReleaseURL(ctx context.Context, api string) (string, error) {
+	body, err := httpGet(ctx, api)
+	if err != nil {
+		return "", err
+	}
+
+	var releases []struct {
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal(body, &releases); err != nil {
+		return "", fmt.Errorf("parse releases JSON: %w", err)
+	}
+	if len(releases) == 0 {
+		return "", errors.New("no releases found")
+	}
+	if releases[0].URL == "" {
+		return "", errors.New("first release missing url")
+	}
+	return releases[0].URL, nil
 }
 
 func fetchTag(ctx context.Context, api string) (string, error) {
