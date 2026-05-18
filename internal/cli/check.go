@@ -105,8 +105,48 @@ func addCheckCmd(root *cobra.Command) {
 		},
 	}
 
-	check.AddCommand(addParent, listCmd, removeCmd, buildCheckEditCmd())
+	testCmd := &cobra.Command{
+		Use:   "test <id-or-name>",
+		Short: "Fire a synthetic transition through this check's effective alerts",
+		Long: `Render and ship a synthetic state-transition message for a real check
+through every alert that would actually receive it. Useful for
+validating alert templates and channel wiring without waiting for a
+real outage. The hysteresis filter that normally suppresses
+Unknown→Up transitions is bypassed: --state up will fire.
+
+Default is --state down, the transition most worth exercising.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
+			defer cancel()
+			state, _ := cmd.Flags().GetString("state")
+			body := daemon.CheckTestBody{CheckID: args[0], State: state}
+			if _, err := callDaemon(ctx, daemon.CtrlCheckTest, body); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "test %s transition fired for check %s\n",
+				normaliseTestState(state), args[0])
+			return nil
+		},
+	}
+	testCmd.Flags().String("state", "down", "synthetic transition to render: down|up|recovered")
+
+	check.AddCommand(addParent, listCmd, removeCmd, testCmd, buildCheckEditCmd())
 	root.AddCommand(check)
+}
+
+// normaliseTestState mirrors the dispatcher's parsing so the CLI's
+// success message matches what was actually fired.
+func normaliseTestState(s string) string {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", "down":
+		return "down"
+	case "up":
+		return "up"
+	case "recovered":
+		return "recovered"
+	}
+	return s
 }
 
 // buildCheckEditCmd returns `qu check edit`, which updates fields of an
