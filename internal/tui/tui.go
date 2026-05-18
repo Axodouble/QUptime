@@ -216,19 +216,19 @@ func (m model) handleKey(km tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "tab", "right", "L":
 		m.active = (m.active + 1) % 3
-		return m, nil
+		return m, tea.ClearScreen
 	case "shift+tab", "left", "H":
 		m.active = (m.active + 2) % 3
-		return m, nil
+		return m, tea.ClearScreen
 	case "1":
 		m.active = tabPeers
-		return m, nil
+		return m, tea.ClearScreen
 	case "2":
 		m.active = tabChecks
-		return m, nil
+		return m, tea.ClearScreen
 	case "3":
 		m.active = tabAlerts
-		return m, nil
+		return m, tea.ClearScreen
 	case "r":
 		m.setFlash("refreshing…", flashInfo)
 		return m, tea.Batch(loadStatusCmd(), loadConfigCmd())
