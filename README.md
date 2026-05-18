@@ -135,46 +135,50 @@ git push --tags
 
 ## Set up a 3-node cluster
 
-On the **first host**:
+On the **first host**, bootstrap and start the daemon:
 
 ```sh
 qu init --advertise alpha.example.com:9901
-```
-
-That prints a random cluster secret. Copy it.
-
-On every **other host**, pass that secret via `--secret`:
-
-```sh
-qu init --advertise bravo.example.com:9901  --secret <paste>
-qu init --advertise charlie.example.com:9901 --secret <paste>
-```
-
-Without the matching secret a node cannot join, so random hosts that
-can reach :9901 are safely ignored.
-
-Start the daemon on every host (foreground; wire into systemd for prod):
-
-```sh
 qu serve
 ```
 
-Then on one node — usually `alpha` — invite the others. The CLI prints
-each remote's fingerprint and asks for confirmation SSH-style:
+For every additional host, mint a pre-deployment enrollment token on
+`alpha` and redeem it on the new host. Tokens are single-use,
+time-limited, and pin the cluster's TLS fingerprint so the new host
+can't be tricked into joining a different cluster.
 
 ```sh
-qu node add bravo.example.com:9901
-qu node add charlie.example.com:9901
+# On alpha (the existing cluster):
+qu enroll create --name bravo --auto-approve --ttl 1h
+# → prints a single `qu enroll join <token>` command, copy it.
+
+# On bravo (the new host, fresh data dir):
+qu enroll join <paste> --advertise bravo.example.com:9901
+qu serve
 ```
 
-After the first invite, give it a few seconds for heartbeats to bring
-the new peer into the live set before inviting the next one — otherwise
-the local node's "needs ≥2 live to mutate" check will reject the
-second add.
+`--auto-approve` makes the cluster accept the joiner automatically on
+submission — handy for cloud-init / Ansible. Drop the flag if you'd
+rather approve interactively from the cluster:
 
-You only need to invite from one node. Peer certs ride along with the
-replicated `cluster.yaml`, so every peer auto-trusts every other peer
-without `N×(N-1)` invites.
+```sh
+# On bravo:
+qu enroll join <token> --advertise bravo.example.com:9901
+# → prints: "enrollment submitted; waiting for cluster-side approval"
+
+# Back on alpha:
+qu enroll list                # see pending submissions
+qu enroll approve <token-id>  # commit; bravo becomes a peer
+```
+
+Either way, trust is acquired from both sides: the joiner verifies the
+cluster's TLS fingerprint (pinned into the token at create time) and
+the cluster verifies the joiner via the token's hashed secret. There
+is no shared cluster-wide secret — see [docs/security.md](docs/security.md)
+for the threat model.
+
+Peer certs ride along with the replicated `cluster.yaml`, so every
+peer auto-trusts every other peer without `N×(N-1)` enrollments.
 
 That's it — the master broadcasts the new cluster config to every
 trusting peer. `qu status` from any node should now show all three:
@@ -485,11 +489,15 @@ sudo setcap cap_net_raw=+ep ./qu
 ## CLI reference
 
 ```
-qu init                                       generate identity + keys
+qu init                                       generate identity + keys (first node only)
 qu serve                                      run the daemon
 qu status                                     quorum, master, check states
 qu tui                                        interactive dashboard
-qu node add    <host:port>                    TOFU-add a peer
+qu enroll create [--name …] [--ttl 1h] [--auto-approve]  mint a pre-deployment token
+qu enroll list                                show outstanding tokens + pending approvals
+qu enroll approve <id-or-name>                approve a pending enrollment
+qu enroll revoke  <id-or-name>                revoke an outstanding token
+qu enroll join    <token> [--advertise …]     redeem a token on a new host
 qu node list                                  show peers + liveness
 qu node remove <node-id>                      remove from cluster + trust
 qu check add http  <name> <url>  [--expect 200] [--interval 30s] [--body-match str] [--alerts a,b]
