@@ -10,6 +10,35 @@ A single static binary contains the daemon, the CLI, and everything in
 between. Inter-node traffic is mutual TLS with SSH-style fingerprint
 trust — no central CA, no shared secret.
 
+<details>
+<summary>Table of contents</summary>
+
+- [qu — quorum-based uptime monitor](#qu--quorum-based-uptime-monitor)
+  - [Installation](#installation)
+    - [From pre-built binary](#from-pre-built-binary)
+    - [From Docker](#from-docker)
+  - [Why](#why)
+  - [Documentation](#documentation)
+  - [Architecture](#architecture)
+  - [Build](#build)
+  - [Releases](#releases)
+  - [Set up a 3-node cluster](#set-up-a-3-node-cluster)
+  - [Adding checks and alerts](#adding-checks-and-alerts)
+  - [Default alerts (attach to every check)](#default-alerts-attach-to-every-check)
+  - [Interactive TUI](#interactive-tui)
+  - [Custom alert messages](#custom-alert-messages)
+    - [Conditionals, pipelines, and worked examples](#conditionals-pipelines-and-worked-examples)
+  - [Edit cluster.yaml directly](#edit-clusteryaml-directly)
+  - [Test an alert without waiting for a real outage](#test-an-alert-without-waiting-for-a-real-outage)
+  - [File layout](#file-layout)
+  - [ICMP and capabilities](#icmp-and-capabilities)
+  - [CLI reference](#cli-reference)
+  - [Tests](#tests)
+  - [What's intentionally not here (v1)](#whats-intentionally-not-here-v1)
+  - [Layout](#layout)
+
+</details>
+
 ## Installation
 
 ### From pre-built binary
