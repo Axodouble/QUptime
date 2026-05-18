@@ -59,13 +59,14 @@ type WhoAmIResponse struct {
 	CertPEM     string `json:"cert_pem"`
 }
 
-// JoinRequest is sent by a node that has just learned the remote's
-// fingerprint out of band and wants the remote to record this node in
-// its own trust store too (so the relationship is symmetric).
+// JoinRequest is the legacy bootstrap request. Kept declared only so
+// pre-v0.2.0 binaries that still send this message can finish their
+// framing — the new daemon's MethodJoin handler ignores the payload
+// entirely and always returns a deprecation message pointing at the
+// enrollment-token flow.
 //
-// ClusterSecret is the pre-shared cluster join key. The recipient
-// rejects the request unless it matches the locally-configured secret
-// in constant time.
+// Deprecated: use EnrollRequest. Will be removed once the installed
+// base has rotated past v0.2.0.
 type JoinRequest struct {
 	NodeID        string `json:"node_id"`
 	Advertise     string `json:"advertise"`
@@ -74,8 +75,9 @@ type JoinRequest struct {
 	ClusterSecret string `json:"cluster_secret"`
 }
 
-// JoinResponse echoes a non-empty Error string when the remote refuses
-// the join (e.g. operator declined the prompt or fingerprint mismatch).
+// JoinResponse is what the deprecation stub returns to a legacy peer
+// that tries the old Join flow. Error always carries a pointer at
+// `qu enroll`; Accepted is always false.
 type JoinResponse struct {
 	Accepted bool   `json:"accepted"`
 	Error    string `json:"error,omitempty"`
@@ -105,17 +107,17 @@ type EnrollRequest struct {
 // EnrollResponse is the cluster's reply to an enrollment attempt.
 //
 //   - Accepted=true  → joiner is now a peer. Cluster snapshot (with
-//                      every existing peer's cert) is included so the
-//                      joiner can populate its own trust store before
-//                      starting `qu serve`.
+//     every existing peer's cert) is included so the
+//     joiner can populate its own trust store before
+//     starting `qu serve`.
 //   - Pending=true   → token valid but AutoApprove=false; the joiner's
-//                      identity has been recorded. An operator on the
-//                      cluster must run `qu enroll approve <id>` to
-//                      finalize. Cluster (the snapshot) is not
-//                      returned in this case — replication only kicks
-//                      in once the joiner is a real peer.
+//     identity has been recorded. An operator on the
+//     cluster must run `qu enroll approve <id>` to
+//     finalize. Cluster (the snapshot) is not
+//     returned in this case — replication only kicks
+//     in once the joiner is a real peer.
 //   - Error          → the token was invalid (unknown, expired, secret
-//                      mismatch) or the request itself was malformed.
+//     mismatch) or the request itself was malformed.
 type EnrollResponse struct {
 	Accepted bool                  `json:"accepted"`
 	Pending  bool                  `json:"pending,omitempty"`
@@ -226,10 +228,10 @@ const (
 
 	// Enrollment-token lifecycle. All four are master-only and route
 	// through the standard ProposeMutation path.
-	MutationAddEnrollment        MutationKind = "add_enrollment"
-	MutationRemoveEnrollment     MutationKind = "remove_enrollment"
-	MutationRecordEnrollPending  MutationKind = "record_enroll_pending"
-	MutationApproveEnrollment    MutationKind = "approve_enrollment"
+	MutationAddEnrollment       MutationKind = "add_enrollment"
+	MutationRemoveEnrollment    MutationKind = "remove_enrollment"
+	MutationRecordEnrollPending MutationKind = "record_enroll_pending"
+	MutationApproveEnrollment   MutationKind = "approve_enrollment"
 )
 
 // ProposeMutationRequest is a follower-to-master message. The payload
