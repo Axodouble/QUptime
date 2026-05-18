@@ -473,37 +473,60 @@ func newAddSMTPForm() *form {
 	})
 }
 
+// newAddNodeForm mints a fresh pre-deployment enrollment token via
+// the daemon and exposes the resulting ID through the flash bar. The
+// operator runs `qu enroll list` (or watches the cluster.yaml diff)
+// to retrieve the full base64 token — it is too long to display
+// comfortably in the TUI's single-line flash, so we just confirm
+// creation and point them at the CLI for the token string itself.
 func newAddNodeForm() *form {
 	fields := []formField{
-		textField("Address", "host:9901 of the peer to invite", true),
+		textField("Name", "optional label for this token (e.g. host name)", false),
+		textField("TTL", "how long the token is valid (default 1h)", false),
+		textField("Auto-approve", "y to skip cluster-side approval, blank for manual", false),
 	}
-	return newForm("Add node (TOFU)", fields, func(vals []string) tea.Cmd {
+	return newForm("Add peer (enrollment token)", fields, func(vals []string) tea.Cmd {
 		return func() tea.Msg {
-			addr := strings.TrimSpace(vals[0])
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			name := strings.TrimSpace(vals[0])
+			ttl := 1 * time.Hour
+			if raw := strings.TrimSpace(vals[1]); raw != "" {
+				parsed, err := time.ParseDuration(raw)
+				if err != nil {
+					return formSubmitErr(fmt.Sprintf("ttl: %v", err))
+				}
+				ttl = parsed
+			}
+			auto := false
+			switch strings.ToLower(strings.TrimSpace(vals[2])) {
+			case "", "n", "no", "false":
+				auto = false
+			case "y", "yes", "true":
+				auto = true
+			default:
+				return formSubmitErr("auto-approve must be y/n")
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
-			raw, err := callDaemon(ctx, daemon.CtrlNodeProbe, daemon.NodeProbeBody{Address: addr})
-			if err != nil {
-				return formSubmitErr(fmt.Sprintf("probe: %v", err))
-			}
-			var probe daemon.NodeProbeResult
-			if err := json.Unmarshal(raw, &probe); err != nil {
-				return formSubmitErr(err.Error())
-			}
-			// auto-accept the fingerprint we just observed. The cluster
-			// secret check on the remote side already prevents random
-			// hosts from being trusted.
-			raw, err = callDaemon(ctx, daemon.CtrlNodeAdd, daemon.NodeAddBody{
-				Address:     addr,
-				Fingerprint: probe.Fingerprint,
+			raw, err := callDaemon(ctx, daemon.CtrlEnrollCreate, daemon.EnrollCreateBody{
+				Name:        name,
+				TTL:         ttl,
+				AutoApprove: auto,
 			})
 			if err != nil {
-				return formSubmitErr(fmt.Sprintf("add: %v", err))
+				return formSubmitErr(err.Error())
 			}
-			var res daemon.NodeAddResult
-			_ = json.Unmarshal(raw, &res)
+			var res daemon.EnrollCreateResult
+			if err := json.Unmarshal(raw, &res); err != nil {
+				return formSubmitErr(err.Error())
+			}
+			approval := "manual"
+			if res.AutoApprove {
+				approval = "auto"
+			}
 			return modalDone{
-				flash: fmt.Sprintf("added node %s — cluster version %d", res.NodeID, res.Version),
+				flash: fmt.Sprintf("enrollment %s created (%s, expires in %s) — run `qu enroll list` to copy the token",
+					res.ID, approval, time.Until(res.ExpiresAt).Round(time.Second)),
 				level: flashInfo,
 			}
 		}
