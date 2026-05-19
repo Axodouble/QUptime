@@ -374,9 +374,16 @@ const PALETTE = [
 ];
 
 const CONDITIONALS = [
-  {expr: "{{if .Check.BodyMatch}}…{{end}}",     desc: "render only if set"},
-  {expr: "{{if .Snapshot.Detail}}…{{end}}",     desc: "render only if set"},
-  {expr: "{{- if .Check.ExpectStatus}}…{{end}}", desc: "trim leading whitespace"},
+  {expr: "{{if .Check.BodyMatch}}…{{end}}",                 desc: "render only if set"},
+  {expr: "{{if .Snapshot.Detail}}…{{end}}",                 desc: "render only if set"},
+  {expr: "{{- if .Check.ExpectStatus}}…{{end}}",            desc: "trim leading whitespace"},
+  {expr: "{{if eq .Verb \"RECOVERED\"}}…{{end}}",           desc: "compare to a literal"},
+  {expr: "{{if ne .Verb \"UP\"}}…{{end}}",                  desc: "not equal"},
+  {expr: "{{if gt .Snapshot.NotOK 0}}…{{end}}",             desc: "numeric compare"},
+  {expr: "{{if and .Check.BodyMatch .Snapshot.Detail}}…{{end}}", desc: "boolean and"},
+  {expr: "{{if or .Check.DNSRecord .Check.DNSResolver}}…{{end}}", desc: "boolean or"},
+  {expr: "{{if not .Check.ExpectStatus}}…{{end}}",          desc: "negate"},
+  {expr: "{{if .X}}…{{else if .Y}}…{{else}}…{{end}}",       desc: "chained branches"},
 ];
 
 // Sample context used to render the preview. Editable in the side panel.
@@ -410,9 +417,13 @@ const SAMPLE = {
 
 // ---------- Go text/template subset renderer ----------
 //
-// Supports: {{ .Path.To.Field }}, {{- ... -}}, {{ if .X }}...{{ else }}...{{ end }}.
-// Unknown actions become "". The aim is preview parity with the qu defaults,
-// not 100 % template/text coverage.
+// Supports: {{ .Path.To.Field }}, {{- ... -}},
+//           {{ if PIPELINE }}…{{ else if PIPELINE }}…{{ else }}…{{ end }},
+//           function-call conditions: eq, ne, lt, le, gt, ge, not, and, or,
+//           string ("…") / number / bool literals as arguments.
+// Unknown actions become "". The aim is preview parity with the qu defaults
+// and ordinary alert templates, not 100 % template/text coverage — pipelines
+// (foo | bar), parens, with, range, and template defines are not implemented.
 
 function lookup(ctx, path) {
   if (!path || path[0] !== ".") return undefined;
@@ -431,6 +442,96 @@ function truthy(v) {
   if (typeof v === "boolean") return v;
   if (Array.isArray(v)) return v.length > 0;
   return true;
+}
+
+// Parse a single template action's arguments into a list of typed tokens.
+// Handles "double-quoted" strings (with \" \\ \n escapes), `raw` strings,
+// integer / float literals, true/false, and dotted paths.
+function parseArgs(s) {
+  const out = [];
+  let i = 0;
+  while (i < s.length) {
+    while (i < s.length && /\s/.test(s[i])) i++;
+    if (i >= s.length) break;
+    const c = s[i];
+    if (c === '"') {
+      let j = i + 1, val = "";
+      while (j < s.length && s[j] !== '"') {
+        if (s[j] === "\\" && j + 1 < s.length) {
+          const esc = s[j+1];
+          val += esc === "n" ? "\n" : esc === "t" ? "\t" : esc === "r" ? "\r" : esc;
+          j += 2;
+        } else {
+          val += s[j++];
+        }
+      }
+      out.push({k: "lit", v: val});
+      i = j + 1;
+    } else if (c === "`") {
+      let j = i + 1, val = "";
+      while (j < s.length && s[j] !== "`") val += s[j++];
+      out.push({k: "lit", v: val});
+      i = j + 1;
+    } else {
+      let j = i;
+      while (j < s.length && !/\s/.test(s[j])) j++;
+      const tok = s.slice(i, j);
+      i = j;
+      if (tok.startsWith(".")) out.push({k: "path", v: tok});
+      else if (/^-?\d+(\.\d+)?$/.test(tok)) out.push({k: "lit", v: Number(tok)});
+      else if (tok === "true") out.push({k: "lit", v: true});
+      else if (tok === "false") out.push({k: "lit", v: false});
+      else if (tok === "nil") out.push({k: "lit", v: null});
+      else out.push({k: "ident", v: tok});
+    }
+  }
+  return out;
+}
+
+function evalArg(a, ctx) {
+  if (a.k === "lit") return a.v;
+  if (a.k === "path") return lookup(ctx, a.v);
+  return undefined;
+}
+
+function goEqual(a, b) {
+  if (a == null && b == null) return true;
+  if (a == null || b == null) return false;
+  if (typeof a === typeof b) return a === b;
+  // Mixed types: Go's eq would error, but for preview purposes coerce to
+  // string so {{eq .Snapshot.Reports "3"}} still "works" intuitively.
+  return String(a) === String(b);
+}
+
+function goCompare(a, b) {
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  const sa = String(a == null ? "" : a), sb = String(b == null ? "" : b);
+  return sa < sb ? -1 : sa > sb ? 1 : 0;
+}
+
+// Evaluate the boolean value of a single `if` / `else if` action body.
+function evalCondition(expr, ctx) {
+  const args = parseArgs(expr);
+  if (args.length === 0) return false;
+  // Single-argument pipeline → truthiness of the value.
+  if (args.length === 1) return truthy(evalArg(args[0], ctx));
+  const head = args[0];
+  if (head.k !== "ident") return truthy(evalArg(head, ctx));
+  const op = head.v;
+  const vs = args.slice(1).map(a => evalArg(a, ctx));
+  switch (op) {
+    case "eq":  return vs.length >= 2 && vs.slice(1).some(v => goEqual(vs[0], v));
+    case "ne":  return vs.length >= 2 && !goEqual(vs[0], vs[1]);
+    case "lt":  return vs.length === 2 && goCompare(vs[0], vs[1]) <  0;
+    case "le":  return vs.length === 2 && goCompare(vs[0], vs[1]) <= 0;
+    case "gt":  return vs.length === 2 && goCompare(vs[0], vs[1]) >  0;
+    case "ge":  return vs.length === 2 && goCompare(vs[0], vs[1]) >= 0;
+    case "not": return vs.length >= 1 && !truthy(vs[0]);
+    case "and": return vs.every(truthy);
+    case "or":  return vs.some(truthy);
+  }
+  // Unknown identifier in the head position: treat as falsy.
+  return false;
 }
 
 function tokenize(tmpl) {
@@ -475,6 +576,14 @@ function render(tmpl, ctx) {
       if (stack.length > 1) stack.pop();
       continue;
     }
+    if (/^else\s+if\s+/.test(a)) {
+      const cond = a.replace(/^else\s+if\s+/, "").trim();
+      const f = top();
+      const take = f.parentEmit && !f.taken && evalCondition(cond, ctx);
+      f.emit = take;
+      f.taken = f.taken || take;
+      continue;
+    }
     if (a === "else") {
       const f = top();
       f.emit = f.parentEmit && !f.taken;
@@ -483,9 +592,9 @@ function render(tmpl, ctx) {
     }
     if (/^if\s+/.test(a)) {
       const cond = a.replace(/^if\s+/, "").trim();
-      const t = truthy(lookup(ctx, cond));
       const parent = top().emit;
-      stack.push({emit: parent && t, parentEmit: parent, taken: parent && t});
+      const take = parent && evalCondition(cond, ctx);
+      stack.push({emit: take, parentEmit: parent, taken: take});
       continue;
     }
     if (/^with\s+/.test(a) || /^range\s+/.test(a)) {
