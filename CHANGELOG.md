@@ -4,6 +4,23 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.2.3] — Unreleased
+
+### Changed
+
+- **Default alert messages now adapt to the check type.** Instead of
+  a single generic format, HTTP, TLS, TCP, ICMP, and DNS each get
+  their own built-in subject + body template that surfaces the
+  fields that matter for that probe — URL + expected status for
+  HTTP, cert state + warn window for TLS, record / resolver /
+  expected substring for DNS, etc. Alerts with a custom
+  `subject_template` / `body_template` are unaffected.
+- The literal source of the per-type templates is included verbatim
+  in [`docs/configuration.md`](docs/configuration.md#default-alert-templates-per-check-type)
+  so operators can copy one as a starting point for customisation.
+  A new exported `alerts.DefaultTemplate(checkType)` returns the raw
+  template strings programmatically.
+
 ## [v0.2.2] — 2026-05-18
 
 Fourth release of the day, pray this will be the last one for now.
