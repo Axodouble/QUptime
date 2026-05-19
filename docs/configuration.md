@@ -287,6 +287,140 @@ Templates are Go `text/template`. The full variable list is in the
 top-level README under "Custom alert messages" — `qu alert add smtp
 --help` and `qu alert add discord --help` print the same table.
 
+### Default alert templates (per check type)
+
+When `subject_template` / `body_template` are left empty, the daemon
+renders the message with a built-in template chosen by the check's
+`type`. Each one surfaces the fields that matter for that probe — HTTP
+shows the URL and expected status, TLS shows the cert state and warn
+window, DNS shows the record / resolver / expected substring, etc.
+
+The templates below are the literal source of the built-ins (see
+`internal/alerts/defaults.go`). Copy any of them into an alert's
+`subject_template` / `body_template` as a starting point for
+customisation; tweak the wording, drop fields you don't care about,
+or wrap sections in `{{if …}}` blocks.
+
+#### HTTP
+
+```
+[quptime] HTTP {{.Verb}} — {{.Check.Name}} ({{.Check.Target}})
+```
+
+```
+HTTP endpoint "{{.Check.Name}}" is now {{.VerbLower}}.
+
+URL:        {{.Check.Target}}
+{{- if .Check.ExpectStatus}}
+Expected:   HTTP {{.Check.ExpectStatus}}
+{{- end}}
+{{- if .Check.BodyMatch}}
+Body match: contains "{{.Check.BodyMatch}}"
+{{- end}}
+{{- if .Snapshot.Detail}}
+Detail:     {{.Snapshot.Detail}}
+{{- end}}
+Previous:   {{.From}}
+Reporters:  {{.Snapshot.OKCount}}/{{.Snapshot.Reports}} OK, {{.Snapshot.NotOK}} failing
+Master:     {{.NodeID}}
+When:       {{.When}}
+```
+
+#### TLS
+
+```
+[quptime] TLS cert {{.Verb}} — {{.Check.Name}} ({{.Check.Target}})
+```
+
+```
+TLS certificate for "{{.Check.Name}}" is now {{.VerbLower}}.
+
+Host:        {{.Check.Target}}
+{{- if .Check.TLSServerName}}
+SNI:         {{.Check.TLSServerName}}
+{{- end}}
+{{- if .Check.TLSWarnDays}}
+Warn window: {{.Check.TLSWarnDays}}d before NotAfter
+{{- end}}
+{{- if .Snapshot.Detail}}
+Cert state:  {{.Snapshot.Detail}}
+{{- end}}
+Previous:    {{.From}}
+Reporters:   {{.Snapshot.OKCount}}/{{.Snapshot.Reports}} OK, {{.Snapshot.NotOK}} failing
+Master:      {{.NodeID}}
+When:        {{.When}}
+```
+
+#### TCP
+
+```
+[quptime] TCP {{.Verb}} — {{.Check.Name}} ({{.Check.Target}})
+```
+
+```
+TCP service "{{.Check.Name}}" is now {{.VerbLower}}.
+
+Endpoint:   {{.Check.Target}}
+{{- if .Snapshot.Detail}}
+Detail:     {{.Snapshot.Detail}}
+{{- end}}
+Previous:   {{.From}}
+Reporters:  {{.Snapshot.OKCount}}/{{.Snapshot.Reports}} OK, {{.Snapshot.NotOK}} failing
+Master:     {{.NodeID}}
+When:       {{.When}}
+```
+
+#### ICMP
+
+```
+[quptime] Ping {{.Verb}} — {{.Check.Name}} ({{.Check.Target}})
+```
+
+```
+Host "{{.Check.Name}}" is now {{.VerbLower}}.
+
+Host:       {{.Check.Target}}
+{{- if .Snapshot.Detail}}
+Detail:     {{.Snapshot.Detail}}
+{{- end}}
+Previous:   {{.From}}
+Reporters:  {{.Snapshot.OKCount}}/{{.Snapshot.Reports}} OK, {{.Snapshot.NotOK}} failing
+Master:     {{.NodeID}}
+When:       {{.When}}
+```
+
+#### DNS
+
+```
+[quptime] DNS {{.Verb}} — {{.Check.Name}} ({{.Check.Target}})
+```
+
+```
+DNS lookup for "{{.Check.Name}}" is now {{.VerbLower}}.
+
+Target:     {{.Check.Target}}
+{{- if .Check.DNSRecord}}
+Record:     {{.Check.DNSRecord}}
+{{- end}}
+{{- if .Check.DNSResolver}}
+Resolver:   {{.Check.DNSResolver}}
+{{- end}}
+{{- if .Check.DNSExpect}}
+Expected:   contains "{{.Check.DNSExpect}}"
+{{- end}}
+{{- if .Snapshot.Detail}}
+Detail:     {{.Snapshot.Detail}}
+{{- end}}
+Previous:   {{.From}}
+Reporters:  {{.Snapshot.OKCount}}/{{.Snapshot.Reports}} OK, {{.Snapshot.NotOK}} failing
+Master:     {{.NodeID}}
+When:       {{.When}}
+```
+
+A future check type without a dedicated template falls back to a
+generic version that prints `Target` plus the `Type` tag — see the
+`DefaultBodyGeneric` constant in `internal/alerts/defaults.go`.
+
 ### Suppression precedence
 
 For each check, the dispatcher computes the effective alert list as:
