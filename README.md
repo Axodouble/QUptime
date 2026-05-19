@@ -340,6 +340,15 @@ Each alert can carry its own `subject_template` and `body_template`
 formatting for that one alert; the default renderer is used otherwise.
 Discord ignores the subject template (it has no subject line).
 
+The built-in renderer picks a different template per check type — HTTP
+surfaces the URL and expected status, TLS surfaces the certificate
+state and warn window, DNS surfaces the record / resolver / expected
+substring, and TCP / ICMP keep a minimal connectivity-focused shape.
+The literal template sources live in
+[`docs/configuration.md`](docs/configuration.md#default-alert-templates-per-check-type)
+under "Default alert templates"; paste any of them into an alert as a
+starting point for customisation.
+
 ```sh
 qu alert add discord oncall --webhook https://... \
     --body ':rotating_light: **{{.Check.Name}}** is now {{.Verb}}
