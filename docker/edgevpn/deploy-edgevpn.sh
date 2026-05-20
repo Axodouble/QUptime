@@ -82,10 +82,12 @@ require_env() {
 
 cmd_gentoken() {
     require_docker
-    echo "Generating a fresh EdgeVPN community token..."
-    echo "Share this token with every node in your cluster (paste it into each .env as EDGEVPNTOKEN):"
-    echo
-    docker run --rm "$EDGEVPN_IMAGE" -g
+    echo "EDGEVPNTOKEN=$(docker run --rm "$EDGEVPN_IMAGE" -g | base64 | tr -d '\n')" > .env 
+    echo "EDGEVPN_ADDRESS=10.202.0.51/24" >> .env 
+    echo "QUPTIME_ADVERTISE=10.202.0.51:9901" >> .env
+    
+    echo "Generated new EdgeVPN token and wrote to .env (also set example EDGEVPN_ADDRESS and QUPTIME_ADVERTISE)"
+    echo "Make sure to update the EDGEVPN_ADDRESS to a unique IP in the same subnet for each node, and set QUPTIME_ADVERTISE to the corresponding host:port that this node will be reachable at from other nodes."
 }
 
 cmd_init() {
