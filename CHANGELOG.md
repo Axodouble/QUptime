@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.3.0] — Unreleased
+
+### Added
+
+- New documented deployment methods for Tailscale and EdgeVPN, with example `docker-compose.yml` files and wrapper scripts in `docker/tailscale/` and `docker/edgevpn/`.
+- New builder command `qu builder`, which generates a standalone HTML alert-template builder
+
 ## [v0.2.3] — 2026-05-19
 
 ### Changed
