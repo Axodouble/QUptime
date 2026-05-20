@@ -1,0 +1,65 @@
+# Example docker-compose for QUptime over Tailscale.
+#
+# Use this for hosts that can't reach each other directly — different
+# VPS providers, NAT'd homelabs, mixed networks. Every node gets a
+# stable tailnet IP and `qu` listens on it; mTLS + pre-deployment
+# enrollment tokens gate everything inside the tunnel.
+#
+# Each host needs a sibling `.env` with:
+#   TAILSCALE_AUTHKEY=tskey-auth-xxxxxxxx
+#   TS_HOSTNAME=quptime-alpha                  # unique per host
+#   QUPTIME_ADVERTISE=100.64.1.1:9901          # this node's tailnet IP
+#
+# Bootstrap is documented in ../docs/deployment/tailscale.md. In short:
+#
+#   First node (auto-initialises as a one-node cluster):
+#     docker compose -f docker-compose.yml up -d
+#
+#   Mint an enrollment token from the running cluster:
+#     docker compose -f docker-compose.yml exec quptime \
+#       qu enroll create --name bravo --auto-approve --ttl 1h
+#
+#   On the new host, run the join BEFORE starting the daemon so the
+#   data volume is populated with this node's identity and the seeded
+#   cluster.yaml:
+#     docker compose -f docker-compose.yml up -d tailscale
+#     docker compose -f docker-compose.yml run --rm quptime \
+#       qu enroll join <token> --advertise "$QUPTIME_ADVERTISE" --yes
+#     docker compose -f docker-compose.yml up -d
+#
+# `deploy-tailscale.sh` in this directory wraps the above.
+
+services:
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: tailscale
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - TS_AUTHKEY=${TAILSCALE_AUTHKEY}
+      - TS_HOSTNAME=${TS_HOSTNAME:-quptime}
+    volumes:
+      - /dev/net/tun:/dev/net/tun
+      - tailscale:/var/lib/tailscale
+    restart: unless-stopped
+
+  quptime:
+    image: git.cer.sh/axodouble/quptime:latest
+    container_name: quptime
+    environment:
+      # host:port other QUptime nodes use to reach this one. Use this
+      # node's tailnet IP / MagicDNS name. `qu serve` auto-initialises
+      # the data volume from this on first start.
+      - QUPTIME_ADVERTISE=${QUPTIME_ADVERTISE}
+    volumes:
+      - quptime:/etc/quptime
+    depends_on:
+      - tailscale
+    network_mode: "service:tailscale"
+    cap_add:
+      - NET_RAW
+    restart: unless-stopped
+
+volumes:
+  tailscale:
+  quptime:
