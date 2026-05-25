@@ -3,7 +3,6 @@ package checks
 import (
 	"context"
 	"net"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -101,25 +100,26 @@ func TestResolverFailover_DialLevel(t *testing.T) {
 	badAddr := bad.Addr().String()
 	bad.Close() // released; subsequent dials will be refused
 
-	// Working listener — we just accept and immediately close, so the
-	// dial succeeds even though it'll be useless for DNS. That's enough
-	// to prove the failover loop.
+	// Working listener — we accept once, signal via channel, then close.
+	// Signalling through a channel is deterministic; observing a counter
+	// after Dial returns races with the Accept goroutine still running.
 	good, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer good.Close()
 	goodAddr := good.Addr().String()
-	var accepted atomic.Int32
+	accepted := make(chan struct{}, 1)
 	go func() {
-		for {
-			conn, err := good.Accept()
-			if err != nil {
-				return
-			}
-			accepted.Add(1)
-			conn.Close()
+		conn, err := good.Accept()
+		if err != nil {
+			return
 		}
+		select {
+		case accepted <- struct{}{}:
+		default:
+		}
+		conn.Close()
 	}()
 
 	r := resolverFor([]string{badAddr, goodAddr}, 1*time.Second)
@@ -134,8 +134,11 @@ func TestResolverFailover_DialLevel(t *testing.T) {
 		t.Fatalf("Dial fell through both: %v", err)
 	}
 	conn.Close()
-	if accepted.Load() == 0 {
-		t.Errorf("expected the working listener to be the one that accepted")
+	select {
+	case <-accepted:
+		// ok — the working listener was the one that accepted
+	case <-time.After(2 * time.Second):
+		t.Errorf("good listener did not accept within 2s; failover loop did not reach it")
 	}
 }
 
