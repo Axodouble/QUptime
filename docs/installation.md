@@ -82,7 +82,7 @@ What it does:
 
 ## Build from source
 
-Requires Go 1.24.2 or newer.
+Requires Go 1.26.3 or newer.
 
 ```sh
 # Either remote — Gitea is canonical, GitHub is a push-mirror.
