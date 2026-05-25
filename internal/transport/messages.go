@@ -232,6 +232,12 @@ const (
 	MutationRemoveEnrollment    MutationKind = "remove_enrollment"
 	MutationRecordEnrollPending MutationKind = "record_enroll_pending"
 	MutationApproveEnrollment   MutationKind = "approve_enrollment"
+
+	// MutationSetResolvers overwrites the cluster-wide default DNS
+	// resolver list. Payload is a JSON []string. An empty list clears
+	// the default so every check falls back to its own override or to
+	// the host's system resolver.
+	MutationSetResolvers MutationKind = "set_resolvers"
 )
 
 // ProposeMutationRequest is a follower-to-master message. The payload
@@ -289,12 +295,13 @@ type PeerLiveness struct {
 
 // CheckSnapshot is the aggregate state of one configured check.
 type CheckSnapshot struct {
-	CheckID string `json:"check_id"`
-	Name    string `json:"name"`
-	State   string `json:"state"` // "up", "down", "unknown"
-	OKCount int    `json:"ok_count"`
-	Total   int    `json:"total"`
-	Detail  string `json:"detail,omitempty"`
+	CheckID  string `json:"check_id"`
+	Name     string `json:"name"`
+	State    string `json:"state"` // "up", "down", "unknown"
+	OKCount  int    `json:"ok_count"`
+	Total    int    `json:"total"`
+	Detail   string `json:"detail,omitempty"`
+	Disabled bool   `json:"disabled,omitempty"`
 	// Alerts holds one display string per effective alert. Names of
 	// default-attached alerts are suffixed with "*" so the operator can
 	// see which fired without lookup.

@@ -1,0 +1,65 @@
+# Example docker-compose for QUptime over EdgeVPN.
+#
+# EdgeVPN (https://github.com/mudler/edgevpn) is a self-hosted P2P
+# overlay — every node joins by sharing the same community token,
+# no central coordinator. QUptime sits inside the overlay netns and
+# only listens on the overlay address.
+#
+# Each host needs a sibling `.env` with:
+#   EDGEVPNTOKEN=<shared token — same string on every node>
+#   EDGEVPN_ADDRESS=10.1.0.11/24                # unique per node
+#   QUPTIME_ADVERTISE=10.1.0.11:9901            # this node's overlay ip
+#
+# Bootstrap mirrors the Tailscale recipe: there is no longer a shared
+# QUptime cluster secret; followers join via single-use pre-deployment
+# enrollment tokens minted on the running cluster.
+#
+#   First node (auto-initialises as a one-node cluster):
+#     docker compose -f docker-compose.yml up -d
+#
+#   Mint an enrollment token from the running cluster:
+#     docker compose -f docker-compose.yml exec quptime \
+#       qu enroll create --name bravo --auto-approve --ttl 1h
+#
+#   On the new host, run the join BEFORE starting the daemon so the
+#   data volume is seeded with this node's identity and cluster.yaml:
+#     docker compose -f docker-compose.yml up -d edgevpn
+#     docker compose -f docker-compose.yml run --rm quptime \
+#       qu enroll join <token> --advertise "$QUPTIME_ADVERTISE" --yes
+#     docker compose -f docker-compose.yml up -d
+#
+# `deploy-edgevpn.sh` in this directory wraps the above.
+
+services:
+  edgevpn:
+    image: quay.io/mudler/edgevpn:latest
+    container_name: edgevpn
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    environment:
+      EDGEVPNTOKEN: "${EDGEVPNTOKEN}"
+      ADDRESS: "${EDGEVPN_ADDRESS}"
+      IFACE: "${EDGEVPN_IFACE:-edgevpn0}"
+    restart: unless-stopped
+
+  quptime:
+    image: git.cer.sh/axodouble/quptime:latest
+    container_name: quptime
+    environment:
+      # host:port other QUptime nodes use to reach this one. Should be
+      # this node's EdgeVPN overlay IP. `qu serve` auto-initialises the
+      # data volume from this on first start.
+      - QUPTIME_ADVERTISE=${QUPTIME_ADVERTISE}
+    volumes:
+      - quptime:/etc/quptime
+    depends_on:
+      - edgevpn
+    network_mode: "service:edgevpn"
+    cap_add:
+      - NET_RAW
+    restart: unless-stopped
+
+volumes:
+  quptime:
