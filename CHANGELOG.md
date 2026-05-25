@@ -4,6 +4,84 @@ All notable changes to this project are documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.3.0] — 2026-05-25
+
+### Added
+
+- New documented deployment methods for Tailscale and EdgeVPN, with example `docker-compose.yml` files and wrapper scripts in `docker/tailscale/` and `docker/edgevpn/`.
+- New builder command `qu builder`, which generates a standalone HTML alert-template builder. The builder ships with a rich expression palette (more logic operators, comparison helpers, and `with` blocks) so you can author multi-branch subject / body templates and copy the rendered Go `text/template` directly into `qu alert add … --body-file`.
+- **Custom DNS resolvers for check target resolution.** Every probe
+  (HTTP / TCP / TLS / ICMP / DNS) can now bypass the host's stub
+  resolver and the local cache by pointing at explicit DNS servers.
+  Two new fields, both `omitempty`:
+  - `cluster.yaml.resolvers` — cluster-wide default list, edited via
+    `qu cluster resolvers set <r1> [<r2> …]` / `clear` / `show`.
+  - `checks[].resolvers` — per-check override, set via the new
+    `--resolvers` flag on `qu check add <type>` and `qu check edit`.
+
+  Lookup precedence on each probe: per-check → cluster default →
+  (DNS checks only) legacy `dns_resolver` → host system resolver.
+  Each entry is `host[:port]` — a bare host gets `:53` appended at
+  use time. Lists are tried in order with **connection-level
+  failover**, so `[1.1.1.1, 1.0.0.1]` rolls over to Cloudflare's
+  secondary when the primary is unreachable. Literal IP targets
+  skip the resolver entirely. ICMP only consults the resolver list
+  when an override is configured; existing ICMP checks with no
+  override behave unchanged.
+- **Pause checks and alerts without deleting them.** Both `Check` and
+  `Alert` carry a new `disabled` (yaml `disabled,omitempty`) field.
+  Disabled checks are skipped by the scheduler — their workers are
+  cancelled on the next reconcile pass — so no probes run and the
+  aggregator stops receiving fresh results. Disabled alerts are
+  filtered out by `EffectiveAlertsFor` before the dispatcher sees
+  them, so they neither fire on transitions nor count toward the
+  `default: true` attachment set. Toggle from the CLI with
+  `qu check enable|disable <id-or-name>` and
+  `qu alert enable|disable <id-or-name>`; from the TUI, `x` on the
+  Checks or Alerts tab. `qu check list` / `qu status` mark disabled
+  checks with `(disabled)` in the STATE column, `qu alert list`
+  gained an `ENABLED` column, and the TUI Checks / Alerts tabs gained
+  an `ON` column. The field is stored as the negation of "enabled"
+  so the zero value of new and existing entries stays enabled — no
+  migration needed.
+
+### Changed
+
+- **TUI modals now scroll** when a form is taller than the terminal (e.g. the SMTP "Add alert" form on a short window). The view auto-centres on the focused field and shows `↑/↓ N more` indicators when content is clipped above or below. #24
+- TUI main page no longer overflows on very short terminals — the body shrinks all the way down to a single row instead of pinning to 5.
+- Release workflows on both Gitea and GitHub now treat `-beta` tags as pre-releases in addition to `-rc`, so a `v0.3.0-beta1` push lands as a pre-release without manual flagging.
+
+### Upgrade notes
+
+Existing clusters keep working with no operator action beyond rolling
+out the new binary — the three new fields (`checks[].disabled`,
+`checks[].resolvers`, `cluster.yaml.resolvers`) are all `omitempty`,
+and `alerts[].disabled` is the negation of "enabled" so unset entries
+stay enabled.
+
+Things to know during the rollout:
+
+- **Don't issue toggle or resolver edits mid-rollout.** A v0.2.x
+  daemon doesn't know `MutationSetResolvers` and will reject it
+  outright with "unknown mutation kind" if it holds master when the
+  CLI submits. Worse: if a v0.2.x master applies any
+  `MutationReplaceConfig` from the manual-edit watcher (an operator
+  saving `cluster.yaml` on an upgraded follower), it will write the
+  file back **without** the new fields — silently dropping any
+  `disabled` flags, per-check `resolvers`, or `cluster.yaml.resolvers`
+  that an upgraded node had just contributed. Finish the rolling
+  upgrade everywhere, then start using `qu check enable|disable`,
+  `qu alert enable|disable`, `qu cluster resolvers …`, and per-check
+  `--resolvers`. Pause hand-edits to `cluster.yaml` during the
+  upgrade window.
+- **Existing `dns_resolver` on DNS checks is preserved.** It now acts
+  as a legacy single-entry fallback used only when both
+  `checks[].resolvers` and `cluster.yaml.resolvers` are empty. No
+  config change required to keep current DNS-check behaviour.
+- **ICMP behaviour is unchanged when no resolver override is set.**
+  pro-bing still does its own lookup against the system resolver for
+  checks that don't configure `resolvers`.
+
 ## [v0.2.3] — 2026-05-19
 
 ### Changed
@@ -299,3 +377,4 @@ Initial public release.
 [v0.2.1]: https://git.cer.sh/axodouble/quptime/releases/tag/v0.2.1
 [v0.2.2]: https://git.cer.sh/axodouble/quptime/releases/tag/v0.2.2
 [v0.2.3]: https://git.cer.sh/axodouble/quptime/releases/tag/v0.2.3
+[v0.3.0]: https://git.cer.sh/axodouble/quptime/releases/tag/v0.3.0

@@ -25,6 +25,8 @@ trust — no central CA, no shared secret.
   - [Set up a 3-node cluster](#set-up-a-3-node-cluster)
   - [Adding checks and alerts](#adding-checks-and-alerts)
   - [Default alerts (attach to every check)](#default-alerts-attach-to-every-check)
+  - [Pause checks and alerts without deleting them](#pause-checks-and-alerts-without-deleting-them)
+  - [Bypass the host's DNS cache (custom resolvers)](#bypass-the-hosts-dns-cache-custom-resolvers)
   - [Interactive TUI](#interactive-tui)
   - [Custom alert messages](#custom-alert-messages)
     - [Conditionals, pipelines, and worked examples](#conditionals-pipelines-and-worked-examples)
@@ -137,7 +139,7 @@ and the daemon will replicate the edit cluster-wide.
 
 ## Build
 
-Requires Go 1.24.2 or newer.
+Requires Go 1.26.3 or newer.
 
 ```sh
 go build -o qu ./cmd/qu
@@ -269,11 +271,12 @@ were attached automatically vs explicitly listed on the check:
 
 ```
 CHECKS
-ID        NAME      STATE  OK/TOTAL  ALERTS         DETAIL
-ddbd...   homepage  up     3/3       oncall,ops*    
-0006...   db        down   1/3       ops*           dial timeout
-24f4...   gateway   up     3/3       -              
-(alerts marked * are attached as defaults)
+ID        NAME      STATE             OK/TOTAL  ALERTS         DETAIL
+ddbd...   homepage  up                3/3       oncall,ops*    
+0006...   db        down              1/3       ops*           dial timeout
+24f4...   gateway   up                3/3       -              
+b8e2...   nightly   (disabled) up     0/0       ops*           
+(alerts marked * are attached as defaults; "(disabled)" checks are paused — see `qu check enable`)
 ```
 
 ## Default alerts (attach to every check)
@@ -295,6 +298,59 @@ specific default by adding the alert's ID or name to its
 `suppress_alert_ids` list in `cluster.yaml` (see "Edit cluster.yaml
 directly" below).
 
+## Pause checks and alerts without deleting them
+
+Both checks and alerts carry a `disabled` flag. A disabled check is
+skipped by the scheduler (no probes are fired and no per-node results
+arrive at the aggregator) and a disabled alert is filtered out of the
+effective alert list (it neither fires on transitions nor counts as a
+default attachment). Useful for planned maintenance, hush-during-a-known-outage, or temporarily silencing a noisy channel without
+losing its configuration.
+
+```sh
+qu check disable homepage      # stop probing
+qu check enable  homepage      # resume
+
+qu alert disable oncall        # silence the channel
+qu alert enable  oncall        # bring it back
+
+qu check list                  # disabled checks show "(disabled) <state>"
+qu alert list                  # ENABLED column shows true/false
+```
+
+Toggling is a regular cluster mutation: it routes through the master
+and replicates like any other edit. In the TUI, `x` on the Checks or
+Alerts tab toggles the selected row.
+
+## Bypass the host's DNS cache (custom resolvers)
+
+By default each probe resolves its target through the host's system
+resolver — which means an `nscd` / `systemd-resolved` cache, or a
+sleepy local DNS server, can keep a check pointed at an IP that has
+since moved. To bypass that path, point `qu` at the resolvers you
+trust:
+
+```sh
+# Cluster-wide default: every check that doesn't override uses these.
+# Tried in order with connection-level failover.
+qu cluster resolvers set 1.1.1.1 1.0.0.1
+qu cluster resolvers show
+qu cluster resolvers clear
+
+# Per-check override (always wins over the cluster default):
+qu check add http homepage https://example.com --resolvers 1.1.1.1,1.0.0.1
+qu check edit homepage --resolvers 8.8.8.8,8.8.4.4
+qu check edit homepage --resolvers ''   # clear; fall back to cluster default
+```
+
+The resolver list applies to HTTP / TCP / TLS / ICMP target lookups
+and (for DNS checks) to the query itself. Each entry is a
+`host[:port]`; a bare host gets `:53` appended at use time. Literal
+IP targets skip the resolver entirely — there's nothing to look up.
+
+Precedence on every probe is **check → cluster → legacy DNSResolver
+(DNS checks only) → host system resolver**.
+
 ## Interactive TUI
 
 Prefer a dashboard over typing commands? `qu tui` opens a full-screen
@@ -307,12 +363,12 @@ every two seconds.
 ┌─ QUptime ── node: 88a00af9   master: 3438fd6f   (follower)  ● quorum 3/2  term 4   ver 10 ──┐
 │ Peers (3)   [2] Checks (3)   [3] Alerts (1)                                                  │
 ├──────────────────────────────────────────────────────────────────────────────────────────────┤
-│ ID         NAME      STATE     OK/TOTAL  ALERTS    DETAIL                                    │
-│ ddbd...    homepage  ● up      3/3       oncall*                                             │
-│ 0006...    db        ● down    1/3       oncall*   dial timeout                              │
-│ 24f4...    gateway   ○ unknown 0/0       -                                                   │
+│ ID         NAME      ON   STATE     OK/TOTAL  ALERTS    DETAIL                               │
+│ ddbd...    homepage  yes  ● up      3/3       oncall*                                        │
+│ 0006...    db        yes  ● down    1/3       oncall*   dial timeout                         │
+│ 24f4...    gateway   no   ○ unknown 0/0       -                                              │
 └──────────────────────────────────────────────────────────────────────────────────────────────┘
-↑↓ navigate   ⇥ next tab   1/2/3 jump   r refresh   a add check  d remove check   q quit
+↑↓ navigate   ⇥ next tab   1/2/3 jump   r refresh   a add  d remove  e edit  t test  x on/off  q quit
 ```
 
 Keybindings:
@@ -326,6 +382,7 @@ Keybindings:
 | `a`                 | add (opens a picker on Checks/Alerts; node form on Peers)                                  |
 | `d`                 | remove the selected row (confirmation prompt)                                              |
 | `t`                 | fire a test transition: synthetic test message on Alerts; pick down/up/recovered on Checks |
+| `x`                 | toggle the selected check / alert on or off (pauses the row without deleting it)           |
 | `D`                 | toggle the selected alert's `default` flag                                                 |
 | `q` / `Ctrl+C`      | quit                                                                                       |
 
@@ -559,18 +616,25 @@ qu enroll revoke  <id-or-name>                revoke an outstanding token
 qu enroll join    <token> [--advertise …]     redeem a token on a new host
 qu node list                                  show peers + liveness
 qu node remove <node-id>                      remove from cluster + trust
-qu check add http  <name> <url>  [--expect 200] [--interval 30s] [--body-match str] [--alerts a,b]
-qu check add tcp   <name> <host:port>
-qu check add icmp  <name> <host>
-qu check add tls   <name> <host[:port]>          [--warn-days 14] [--sni name]
-qu check add dns   <name> <hostname>             [--record a|aaaa|cname|mx|txt|ns] [--resolver host:port] [--expect substr]
+qu check add http  <name> <url>  [--expect 200] [--interval 30s] [--body-match str] [--alerts a,b] [--resolvers 1.1.1.1,1.0.0.1]
+qu check add tcp   <name> <host:port>                                                                  [--resolvers 1.1.1.1,1.0.0.1]
+qu check add icmp  <name> <host>                                                                       [--resolvers 1.1.1.1,1.0.0.1]
+qu check add tls   <name> <host[:port]>          [--warn-days 14] [--sni name]                         [--resolvers 1.1.1.1,1.0.0.1]
+qu check add dns   <name> <hostname>             [--record a|aaaa|cname|mx|txt|ns] [--resolver host:port] [--expect substr] [--resolvers …]
 qu check list
-qu check remove <id-or-name>
-qu check test   <id-or-name> [--state down|up|recovered]  fire a synthetic transition to exercise alert templates
+qu check remove  <id-or-name>
+qu check enable  <id-or-name>                   resume probing a previously disabled check
+qu check disable <id-or-name>                   stop probing without deleting the check
+qu check test    <id-or-name> [--state down|up|recovered]  fire a synthetic transition to exercise alert templates
 qu alert add smtp    <name> --host … --port … --from … --to … [--user --password --starttls] [--default] [--subject … --body …]
 qu alert add discord <name> --webhook …                                                        [--default] [--body …]
 qu alert list / remove / test <id-or-name>
+qu alert enable  <id-or-name>                   resume firing a previously disabled alert
+qu alert disable <id-or-name>                   silence an alert without deleting it
 qu alert default <id-or-name> on|off            toggle default attachment to every check
+qu cluster resolvers show                       print the cluster-wide default DNS resolver list
+qu cluster resolvers set  <r1> [<r2> …]         replace the cluster-wide resolver list (failover order)
+qu cluster resolvers clear                      drop the cluster-wide list; every check falls back to host resolver
 qu trust list / remove <node-id>
 qu update [--check] [--force] [--source gitea|github] [--beta]   replace this binary with the latest release
 ```

@@ -131,8 +131,63 @@ Default is --state down, the transition most worth exercising.`,
 	}
 	testCmd.Flags().String("state", "down", "synthetic transition to render: down|up|recovered")
 
-	check.AddCommand(addParent, listCmd, removeCmd, testCmd, buildCheckEditCmd())
+	enableCmd := buildCheckToggleCmd("enable", false,
+		"Re-enable a paused check so the scheduler probes it again")
+	disableCmd := buildCheckToggleCmd("disable", true,
+		"Pause a check: the scheduler stops probing it and no alerts fire from its state")
+
+	check.AddCommand(addParent, listCmd, removeCmd, testCmd, enableCmd, disableCmd, buildCheckEditCmd())
 	root.AddCommand(check)
+}
+
+// buildCheckToggleCmd returns the `qu check enable|disable` subcommand.
+// Both share an implementation: look up the check, flip Disabled, and
+// re-submit it through the standard AddCheck mutation (which replaces
+// any existing entry with matching ID).
+func buildCheckToggleCmd(use string, disabled bool, short string) *cobra.Command {
+	return &cobra.Command{
+		Use:   use + " <id-or-name>",
+		Short: short,
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithTimeout(cmd.Context(), 10*time.Second)
+			defer cancel()
+			cluster, err := config.LoadClusterConfig()
+			if err != nil {
+				return err
+			}
+			var existing *config.Check
+			for i := range cluster.Checks {
+				if cluster.Checks[i].ID == args[0] || cluster.Checks[i].Name == args[0] {
+					cp := cluster.Checks[i]
+					existing = &cp
+					break
+				}
+			}
+			if existing == nil {
+				return fmt.Errorf("no check named %q", args[0])
+			}
+			if existing.Disabled == disabled {
+				fmt.Fprintf(cmd.OutOrStdout(), "check %s already %sd\n", existing.Name, use)
+				return nil
+			}
+			existing.Disabled = disabled
+			payload, err := json.Marshal(existing)
+			if err != nil {
+				return err
+			}
+			body := daemon.MutateBody{Kind: transport.MutationAddCheck, Payload: payload}
+			raw, err := callDaemon(ctx, daemon.CtrlMutate, body)
+			if err != nil {
+				return err
+			}
+			var res daemon.MutateResult
+			_ = json.Unmarshal(raw, &res)
+			fmt.Fprintf(cmd.OutOrStdout(), "%sd check %s (cluster version now %d)\n",
+				use, existing.Name, res.Version)
+			return nil
+		},
+	}
 }
 
 // normaliseTestState mirrors the dispatcher's parsing so the CLI's
@@ -219,6 +274,16 @@ all other fields are preserved from the existing record. HTTP-only flags
 					}
 				}
 			}
+			if f.Changed("resolvers") {
+				rs, _ := f.GetStringSlice("resolvers")
+				existing.Resolvers = nil
+				for _, r := range rs {
+					r = strings.TrimSpace(r)
+					if r != "" {
+						existing.Resolvers = append(existing.Resolvers, r)
+					}
+				}
+			}
 			if f.Changed("expect") {
 				v, _ := f.GetString("expect")
 				switch existing.Type {
@@ -290,6 +355,7 @@ all other fields are preserved from the existing record. HTTP-only flags
 	cmd.Flags().String("interval", "", "new probe interval (e.g. 30s, 1m)")
 	cmd.Flags().String("timeout", "", "new per-probe timeout (e.g. 10s)")
 	cmd.Flags().String("alerts", "", "replace alert list with this CSV of IDs/names (pass empty to clear)")
+	cmd.Flags().StringSlice("resolvers", nil, "replace the resolver list (e.g. --resolvers 1.1.1.1,1.0.0.1). Pass --resolvers '' to clear and fall back to the cluster default.")
 	cmd.Flags().String("expect", "", "HTTP: expected status code; DNS: substring required in an answer")
 	cmd.Flags().String("body-match", "", "substring required in body (HTTP only)")
 	cmd.Flags().Int("warn-days", 0, "TLS: fail when cert expires within this many days")
@@ -363,6 +429,14 @@ func buildAddCheckCmd(ctype config.CheckType, use, argSpec, short string,
 					}
 				}
 			}
+			if resolvers, _ := cmd.Flags().GetStringSlice("resolvers"); len(resolvers) > 0 {
+				for _, r := range resolvers {
+					r = strings.TrimSpace(r)
+					if r != "" {
+						ch.Resolvers = append(ch.Resolvers, r)
+					}
+				}
+			}
 			if ctype == config.CheckHTTP {
 				es, _ := cmd.Flags().GetInt("expect")
 				bm, _ := cmd.Flags().GetString("body-match")
@@ -408,4 +482,5 @@ func bindCheckFlags(cmd *cobra.Command) {
 	cmd.Flags().String("interval", "30s", "probe interval")
 	cmd.Flags().String("timeout", "10s", "per-probe timeout")
 	cmd.Flags().String("alerts", "", "comma-separated alert IDs/names to notify on transition")
+	cmd.Flags().StringSlice("resolvers", nil, "DNS servers to resolve this check's target (e.g. 1.1.1.1,1.0.0.1). Bypasses the host's resolver cache. Tried in order with connection-level failover. Empty = use the cluster default (qu cluster resolvers show).")
 }

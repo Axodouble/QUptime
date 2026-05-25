@@ -196,18 +196,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Pass through to the active tab so j/k/PgUp/PgDn scroll the table.
-	switch m.active {
-	case tabPeers:
-		_, cmd := m.peers.Update(msg)
-		return m, cmd
-	case tabChecks:
-		_, cmd := m.checks.Update(msg)
-		return m, cmd
-	case tabAlerts:
-		_, cmd := m.alertsT.Update(msg)
-		return m, cmd
-	}
-	return m, nil
+	return m, m.forwardToActiveTab(msg)
 }
 
 func (m model) handleKey(km tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -220,14 +209,8 @@ func (m model) handleKey(km tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "shift+tab", "left", "H":
 		m.active = (m.active + 2) % 3
 		return m, tea.ClearScreen
-	case "1":
-		m.active = tabPeers
-		return m, tea.ClearScreen
-	case "2":
-		m.active = tabChecks
-		return m, tea.ClearScreen
-	case "3":
-		m.active = tabAlerts
+	case "1", "2", "3":
+		m.active = tabIndex(km.String()[0] - '1')
 		return m, tea.ClearScreen
 	case "r":
 		m.setFlash("refreshing…", flashInfo)
@@ -250,21 +233,33 @@ func (m model) handleKey(km tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.active == tabAlerts {
 			return m.toggleSelectedDefault()
 		}
+	case "x":
+		switch m.active {
+		case tabChecks:
+			return m.toggleSelectedCheckEnabled()
+		case tabAlerts:
+			return m.toggleSelectedAlertEnabled()
+		}
 	}
 
 	// Forward everything else (arrow keys etc.) to the active tab.
+	return m, m.forwardToActiveTab(km)
+}
+
+// forwardToActiveTab passes msg to whichever tab is currently focused.
+// Used for both arbitrary tea.Msg pass-through (mouse, ticks) and for
+// keys handleKey didn't claim.
+func (m model) forwardToActiveTab(msg tea.Msg) tea.Cmd {
+	var cmd tea.Cmd
 	switch m.active {
 	case tabPeers:
-		_, cmd := m.peers.Update(km)
-		return m, cmd
+		_, cmd = m.peers.Update(msg)
 	case tabChecks:
-		_, cmd := m.checks.Update(km)
-		return m, cmd
+		_, cmd = m.checks.Update(msg)
 	case tabAlerts:
-		_, cmd := m.alertsT.Update(km)
-		return m, cmd
+		_, cmd = m.alertsT.Update(msg)
 	}
-	return m, nil
+	return cmd
 }
 
 // =============================================================
@@ -425,9 +420,9 @@ func (m model) renderHelp() string {
 	case tabPeers:
 		specific = "a add  e edit  d remove"
 	case tabChecks:
-		specific = "a add  e edit  d remove  t test"
+		specific = "a add  e edit  d remove  t test  x toggle on/off"
 	case tabAlerts:
-		specific = "a add  e edit  d remove  t test  D toggle default"
+		specific = "a add  e edit  d remove  t test  D toggle default  x toggle on/off"
 	}
 	return helpStyle.Render(fmt.Sprintf("↑↓ navigate   ⇥ next tab   1/2/3 jump   r refresh   %s   q quit", specific))
 }
@@ -656,6 +651,68 @@ func (m model) testSelectedAlert() (tea.Model, tea.Cmd) {
 	}
 }
 
+func (m model) toggleSelectedCheckEnabled() (tea.Model, tea.Cmd) {
+	id := m.checks.Selected()
+	if id == "" {
+		return m, nil
+	}
+	var target *config.Check
+	for i := range m.checksFull {
+		if m.checksFull[i].ID == id {
+			cp := m.checksFull[i]
+			target = &cp
+			break
+		}
+	}
+	if target == nil {
+		m.setFlash("check not found in local cluster.yaml", flashError)
+		return m, nil
+	}
+	target.Disabled = !target.Disabled
+	name := target.Name
+	verb := "enabled"
+	if target.Disabled {
+		verb = "disabled"
+	}
+	return m, func() tea.Msg {
+		if err := mutateAdd(transport.MutationAddCheck, target); err != nil {
+			return modalDone{flash: "toggle failed: " + err.Error(), level: flashError}
+		}
+		return modalDone{flash: fmt.Sprintf("check %s %s", name, verb), level: flashInfo}
+	}
+}
+
+func (m model) toggleSelectedAlertEnabled() (tea.Model, tea.Cmd) {
+	id := m.alertsT.Selected()
+	if id == "" {
+		return m, nil
+	}
+	var target *config.Alert
+	for i := range m.alerts {
+		if m.alerts[i].ID == id {
+			cp := m.alerts[i]
+			target = &cp
+			break
+		}
+	}
+	if target == nil {
+		m.setFlash("alert not found in local cluster.yaml", flashError)
+		return m, nil
+	}
+	target.Disabled = !target.Disabled
+	name := target.Name
+	verb := "enabled"
+	if target.Disabled {
+		verb = "disabled"
+	}
+	return m, func() tea.Msg {
+		if err := mutateAdd(transport.MutationAddAlert, target); err != nil {
+			return modalDone{flash: "toggle failed: " + err.Error(), level: flashError}
+		}
+		return modalDone{flash: fmt.Sprintf("alert %s %s", name, verb), level: flashInfo}
+	}
+}
+
 func (m model) toggleSelectedDefault() (tea.Model, tea.Cmd) {
 	row := m.alertsT.SelectedAlert()
 	if row == nil {
@@ -700,11 +757,15 @@ func (m *model) setFlash(s string, level flashLevel) {
 
 func (m *model) resizeTabs() {
 	// Rows consumed outside the body: header (variable), tabs (1),
-	// body's own rounded border (2), flash (1), help (1).
+	// body's own rounded border (2), flash (1), help (1). On terminals
+	// too small to honor the reservation, shrink the body all the way
+	// down to 1 row rather than letting the page overflow — the table
+	// will collapse to a single visible row but the rest of the chrome
+	// stays on screen.
 	reserved := m.headerHeight() + 5
 	bodyH := m.height - reserved
-	if bodyH < 5 {
-		bodyH = 5
+	if bodyH < 1 {
+		bodyH = 1
 	}
 	bodyW := m.width - 4
 	if bodyW < 20 {
@@ -729,6 +790,7 @@ func toAlertRows(alerts []config.Alert) []alertRow {
 			ID:       a.ID,
 			Name:     a.Name,
 			Type:     string(a.Type),
+			Enabled:  !a.Disabled,
 			Default:  a.Default,
 			HasTmpl:  a.SubjectTemplate != "" || a.BodyTemplate != "",
 			Endpoint: endpoint,

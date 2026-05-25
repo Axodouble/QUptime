@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -91,6 +92,7 @@ func newChecksTab() *checksTab {
 	cols := []table.Column{
 		{Title: "ID", Width: 38},
 		{Title: "NAME", Width: 18},
+		{Title: "ON", Width: 4},
 		{Title: "STATE", Width: 12},
 		{Title: "OK/TOTAL", Width: 10},
 		{Title: "ALERTS", Width: 24},
@@ -133,16 +135,16 @@ func (c *checksTab) SelectedName() string {
 func (c *checksTab) Refresh(st transport.StatusResponse) {
 	rows := make([]table.Row, 0, len(st.Checks))
 	for _, ch := range st.Checks {
-		okTotal := lipgloss.NewStyle().Render("0/0")
+		okTotal := "0/0"
 		if ch.Total > 0 {
-			okTotal = lipgloss.NewStyle().Render(itoa(ch.OKCount) + "/" + itoa(ch.Total))
+			okTotal = strconv.Itoa(ch.OKCount) + "/" + strconv.Itoa(ch.Total)
 		}
 		alerts := strings.Join(ch.Alerts, ",")
 		if alerts == "" {
 			alerts = "-"
 		}
 		rows = append(rows, table.Row{
-			ch.CheckID, ch.Name, renderState(ch.State), okTotal, alerts, truncate(ch.Detail, 38),
+			ch.CheckID, ch.Name, enabledCol(!ch.Disabled), renderState(ch.State), okTotal, alerts, truncate(ch.Detail, 38),
 		})
 	}
 	c.tbl.SetRows(rows)
@@ -158,6 +160,7 @@ type alertRow struct {
 	ID       string
 	Name     string
 	Type     string
+	Enabled  bool
 	Default  bool
 	HasTmpl  bool
 	Endpoint string
@@ -167,6 +170,7 @@ func newAlertsTab() *alertsTab {
 	cols := []table.Column{
 		{Title: "ID", Width: 38},
 		{Title: "NAME", Width: 16},
+		{Title: "ON", Width: 4},
 		{Title: "TYPE", Width: 10},
 		{Title: "DEFAULT", Width: 8},
 		{Title: "CUSTOM-MSG", Width: 11},
@@ -229,7 +233,7 @@ func (a *alertsTab) Refresh(alerts []alertRow) {
 		if r.HasTmpl {
 			tmpl = "yes"
 		}
-		rows = append(rows, table.Row{r.ID, r.Name, r.Type, def, tmpl, truncate(r.Endpoint, 34)})
+		rows = append(rows, table.Row{r.ID, r.Name, enabledCol(r.Enabled), r.Type, def, tmpl, truncate(r.Endpoint, 34)})
 	}
 	a.tbl.SetRows(rows)
 }
@@ -255,27 +259,13 @@ func livenessText(live bool) string {
 	return "dead"
 }
 
-func itoa(i int) string {
-	// avoid pulling fmt in the hot path of refresh
-	if i == 0 {
-		return "0"
+// enabledCol renders the boolean enabled flag as a compact glyph for the
+// "ON" column shared by the checks and alerts tabs.
+func enabledCol(enabled bool) string {
+	if enabled {
+		return "yes"
 	}
-	neg := i < 0
-	if neg {
-		i = -i
-	}
-	var buf [20]byte
-	pos := len(buf)
-	for i > 0 {
-		pos--
-		buf[pos] = byte('0' + i%10)
-		i /= 10
-	}
-	if neg {
-		pos--
-		buf[pos] = '-'
-	}
-	return string(buf[pos:])
+	return "no"
 }
 
 func truncate(s string, max int) string {

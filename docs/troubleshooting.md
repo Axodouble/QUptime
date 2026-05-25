@@ -67,6 +67,8 @@ Possible causes:
   interval). Probably means probes are timing out without reporting.
 - This is a follower's view; the aggregator runs on the master only.
   Check `qu status` on the master to see the canonical view.
+- The check is disabled. `qu check list` will show `(disabled) <state>`
+  in the STATE column. Re-enable with `qu check enable <id-or-name>`.
 
 ## Alerts not firing
 
@@ -74,13 +76,18 @@ Walk this list in order; one of them will catch it:
 
 1. **Is there quorum?** Aggregator runs on master only. No master →
    no transitions → no alerts.
-2. **Is the alert attached to the check?** `qu status` shows the
+2. **Is the check or the alert disabled?** A check with
+   `disabled: true` is never probed (no transitions, no alerts). An
+   alert with `disabled: true` is filtered out of every check's
+   effective alert list. `qu check list` and `qu alert list` make
+   both visible; re-enable with `qu check enable` / `qu alert enable`.
+3. **Is the alert attached to the check?** `qu status` shows the
    effective alert list per check. Empty → no alert. Confirm with
    `qu alert list` that the alert exists and (if relying on default
    attachment) has `default: true`.
-3. **Is the alert suppressed on this check?** Check
+4. **Is the alert suppressed on this check?** Check
    `suppress_alert_ids` in `cluster.yaml`.
-4. **Test the alert path directly:**
+5. **Test the alert path directly:**
 
    ```sh
    sudo -u quptime qu alert test <name>
@@ -90,10 +97,44 @@ Walk this list in order; one of them will catch it:
    If `alert test` doesn't deliver, the problem is the notifier
    config or the template — see below. If `alert test` works but real
    transitions don't, the aggregator isn't observing the transition.
-5. **Has the check actually transitioned?** Aggregator commits a flip
+6. **Has the check actually transitioned?** Aggregator commits a flip
    only after **two consecutive** evaluations agree. A bouncing
    target may never satisfy the hysteresis. Lower the check interval
    or increase reliability of the target.
+
+## A check is hitting the wrong IP (stale local DNS)
+
+**Symptoms.** Your HTTP / TCP / TLS check is flapping or stays
+`down`, but a fresh `dig` from another machine resolves the hostname
+to a different (working) IP. The daemon is using a cached or stale
+record from the host's stub resolver.
+
+**Diagnose.**
+
+```sh
+# what `qu` resolves vs. what an authoritative resolver returns:
+getent hosts example.com          # = what the daemon sees via systemd-resolved/nscd
+dig +short @1.1.1.1 example.com   # = what's actually in DNS right now
+```
+
+If they disagree, the local cache is the culprit.
+
+**Fix.** Point that check (or the whole cluster) at the resolvers you
+trust:
+
+```sh
+# Whole cluster: every check that doesn't override uses these.
+sudo -u quptime qu cluster resolvers set 1.1.1.1 1.0.0.1
+
+# Just one check:
+sudo -u quptime qu check edit homepage --resolvers 1.1.1.1,1.0.0.1
+```
+
+The list is tried in order with connection-level failover. Literal
+IP targets skip the resolver entirely, so a check whose target is
+already an IP isn't subject to caching. See
+[configuration.md → DNS resolver precedence](configuration.md#dns-resolver-precedence)
+for the full lookup order.
 
 ## Discord webhook returns 4xx
 
