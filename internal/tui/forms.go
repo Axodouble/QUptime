@@ -13,10 +13,10 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/google/uuid"
 
-	"git.cer.sh/axodouble/quptime/internal/alerts"
-	"git.cer.sh/axodouble/quptime/internal/config"
-	"git.cer.sh/axodouble/quptime/internal/daemon"
-	"git.cer.sh/axodouble/quptime/internal/transport"
+	"git.jas.pe/vrepsaj/quptime/internal/alerts"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/daemon"
+	"git.jas.pe/vrepsaj/quptime/internal/transport"
 )
 
 // modalDone tells the parent the modal is finished. Flash, when set,

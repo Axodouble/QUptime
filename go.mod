@@ -1,4 +1,4 @@
-module git.cer.sh/axodouble/quptime
+module git.jas.pe/vrepsaj/quptime
 
 go 1.26.3
 

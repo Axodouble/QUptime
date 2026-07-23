@@ -327,8 +327,8 @@ Initial public release.
   `quptime` user, `ProtectSystem=strict`, all capabilities dropped by
   default.
 - **Multi-arch Docker images** (`linux/amd64`, `linux/arm64`)
-  published to `git.cer.sh/axodouble/quptime` (primary) and
-  `ghcr.io/axodouble/quptime` (GitHub push-mirror) on every tag.
+  published to `git.jas.pe/vrepsaj/quptime` (primary) and
+  `ghcr.io/vrepsaj/quptime` (GitHub push-mirror) on every tag.
 - **Static Linux binaries** (`amd64`, `arm64`) published per tag with
   a `SHA256SUMS` file to both Gitea Releases (primary) and GitHub
   Releases (mirror). The official installer prefers Gitea, falls back
@@ -369,12 +369,12 @@ Initial public release.
 - **No release signing beyond SHA256SUMS** (no cosign / GPG).
   Planned for a future release.
 
-[v0.0.1]: https://git.cer.sh/axodouble/quptime/releases/tag/v0.0.1
-[v0.1.0]: https://git.cer.sh/axodouble/quptime/releases/tag/v0.1.0
-[v0.1.1]: https://git.cer.sh/axodouble/quptime/releases/tag/v0.1.1
-[v0.1.2]: https://git.cer.sh/axodouble/quptime/releases/tag/v0.1.2
-[v0.2.0]: https://git.cer.sh/axodouble/quptime/releases/tag/v0.2.0
-[v0.2.1]: https://git.cer.sh/axodouble/quptime/releases/tag/v0.2.1
-[v0.2.2]: https://git.cer.sh/axodouble/quptime/releases/tag/v0.2.2
-[v0.2.3]: https://git.cer.sh/axodouble/quptime/releases/tag/v0.2.3
-[v0.3.0]: https://git.cer.sh/axodouble/quptime/releases/tag/v0.3.0
+[v0.0.1]: https://git.jas.pe/vrepsaj/quptime/releases/tag/v0.0.1
+[v0.1.0]: https://git.jas.pe/vrepsaj/quptime/releases/tag/v0.1.0
+[v0.1.1]: https://git.jas.pe/vrepsaj/quptime/releases/tag/v0.1.1
+[v0.1.2]: https://git.jas.pe/vrepsaj/quptime/releases/tag/v0.1.2
+[v0.2.0]: https://git.jas.pe/vrepsaj/quptime/releases/tag/v0.2.0
+[v0.2.1]: https://git.jas.pe/vrepsaj/quptime/releases/tag/v0.2.1
+[v0.2.2]: https://git.jas.pe/vrepsaj/quptime/releases/tag/v0.2.2
+[v0.2.3]: https://git.jas.pe/vrepsaj/quptime/releases/tag/v0.2.3
+[v0.3.0]: https://git.jas.pe/vrepsaj/quptime/releases/tag/v0.3.0

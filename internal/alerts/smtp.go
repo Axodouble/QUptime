@@ -7,7 +7,7 @@ import (
 	"net/smtp"
 	"strings"
 
-	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
 )
 
 // sendSMTP delivers msg through the alert's SMTP relay. STARTTLS is

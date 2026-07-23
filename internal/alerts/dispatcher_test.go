@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"git.cer.sh/axodouble/quptime/internal/checks"
-	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/checks"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
 )
 
 func TestShouldAlertFiltersColdStartUp(t *testing.T) {

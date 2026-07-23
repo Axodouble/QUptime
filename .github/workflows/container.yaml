@@ -3,7 +3,7 @@ name: Container image
 # Mirrors .gitea/workflows/container.yaml — publishes a multi-arch
 # (amd64 + arm64) image to the GitHub Container Registry whenever the
 # Gitea→GitHub mirror pushes a `v*` tag. Image lands at
-# ghcr.io/axodouble/quptime with tags :vX.Y.Z, :X.Y, and :latest.
+# ghcr.io/vrepsaj/quptime with tags :vX.Y.Z, :X.Y, and :latest.
 on:
   push:
     tags:
@@ -28,7 +28,7 @@ jobs:
 
       # GHCR namespaces must be lowercase. Lowercase the repository
       # path once and reuse below so a mixed-case org/repo (e.g.
-      # Axodouble/QUptime) still resolves to a valid image reference.
+      # vrepsaj/QUptime) still resolves to a valid image reference.
       - name: Resolve image name
         id: img
         run: |

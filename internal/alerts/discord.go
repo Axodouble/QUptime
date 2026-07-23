@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
 )
 
 // discordTimeout caps how long a single webhook POST is allowed to

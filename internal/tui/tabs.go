@@ -9,7 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"git.cer.sh/axodouble/quptime/internal/transport"
+	"git.jas.pe/vrepsaj/quptime/internal/transport"
 )
 
 // tabModel is the small surface every tab implements. Tabs share the

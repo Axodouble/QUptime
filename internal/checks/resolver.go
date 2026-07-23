@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
 )
 
 // defaultResolverPort is appended when an operator gives a bare IP /

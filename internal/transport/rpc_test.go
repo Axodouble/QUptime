@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"git.cer.sh/axodouble/quptime/internal/crypto"
-	"git.cer.sh/axodouble/quptime/internal/trust"
+	"git.jas.pe/vrepsaj/quptime/internal/crypto"
+	"git.jas.pe/vrepsaj/quptime/internal/trust"
 )
 
 // testNode bundles everything one side of the handshake needs.

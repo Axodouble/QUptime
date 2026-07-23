@@ -22,14 +22,14 @@ import (
 	"sync"
 	"time"
 
-	"git.cer.sh/axodouble/quptime/internal/alerts"
-	"git.cer.sh/axodouble/quptime/internal/checks"
-	"git.cer.sh/axodouble/quptime/internal/config"
-	"git.cer.sh/axodouble/quptime/internal/crypto"
-	"git.cer.sh/axodouble/quptime/internal/quorum"
-	"git.cer.sh/axodouble/quptime/internal/replicate"
-	"git.cer.sh/axodouble/quptime/internal/transport"
-	"git.cer.sh/axodouble/quptime/internal/trust"
+	"git.jas.pe/vrepsaj/quptime/internal/alerts"
+	"git.jas.pe/vrepsaj/quptime/internal/checks"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/crypto"
+	"git.jas.pe/vrepsaj/quptime/internal/quorum"
+	"git.jas.pe/vrepsaj/quptime/internal/replicate"
+	"git.jas.pe/vrepsaj/quptime/internal/transport"
+	"git.jas.pe/vrepsaj/quptime/internal/trust"
 )
 
 // Daemon is the live process: every long-running component lives here.

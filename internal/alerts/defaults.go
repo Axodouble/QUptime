@@ -3,7 +3,7 @@ package alerts
 import (
 	"text/template"
 
-	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
 )
 
 // Per-type default subject and body templates. These are used when an

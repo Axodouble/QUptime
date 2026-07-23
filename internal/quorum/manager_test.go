@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"git.cer.sh/axodouble/quptime/internal/config"
-	"git.cer.sh/axodouble/quptime/internal/transport"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/transport"
 )
 
 func threeNode(self string) (*config.ClusterConfig, *Manager) {

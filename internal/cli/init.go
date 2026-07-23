@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
-	"git.cer.sh/axodouble/quptime/internal/config"
-	"git.cer.sh/axodouble/quptime/internal/crypto"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/crypto"
 )
 
 func addInitCmd(root *cobra.Command) {

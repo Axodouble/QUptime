@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"time"
 
-	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
 )
 
 // Result is the outcome of a single probe.

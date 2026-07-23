@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
 )
 
 // maxBodyRead is the cap on how much body a check will pull when

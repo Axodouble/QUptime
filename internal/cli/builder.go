@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"git.cer.sh/axodouble/quptime/internal/alerts"
+	"git.jas.pe/vrepsaj/quptime/internal/alerts"
 )
 
 //go:embed builder.html

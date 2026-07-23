@@ -56,15 +56,15 @@ both.
 
 | Source          | Releases                                        | Container image                |
 | --------------- | ----------------------------------------------- | ------------------------------ |
-| Gitea (primary) | <https://git.cer.sh/axodouble/quptime/releases> | `git.cer.sh/axodouble/quptime` |
-| GitHub (mirror) | <https://github.com/Axodouble/QUptime/releases> | `ghcr.io/axodouble/quptime`    |
+| Gitea (primary) | <https://git.jas.pe/vrepsaj/quptime/releases> | `git.jas.pe/vrepsaj/quptime` |
+| GitHub (mirror) | <https://github.com/vrepsaj/QUptime/releases> | `ghcr.io/vrepsaj/quptime`    |
 
 One-step install — tries Gitea first, falls back to GitHub automatically:
 
 ```sh
-curl -fsSL https://git.cer.sh/Axodouble/QUptime/raw/branch/master/install.sh | sudo bash
+curl -fsSL https://git.jas.pe/vrepsaj/QUptime/raw/branch/master/install.sh | sudo bash
 # or, via the GitHub mirror:
-# curl -fsSL https://raw.githubusercontent.com/Axodouble/QUptime/master/install.sh | sudo bash
+# curl -fsSL https://raw.githubusercontent.com/vrepsaj/QUptime/master/install.sh | sudo bash
 ```
 
 The script verifies the binary against the published `SHA256SUMS`
@@ -73,9 +73,9 @@ before installing and refuses to proceed on a mismatch.
 ### From Docker
 
 ```sh
-docker pull git.cer.sh/axodouble/quptime:latest
+docker pull git.jas.pe/vrepsaj/quptime:latest
 # or, via the GitHub mirror:
-# docker pull ghcr.io/axodouble/quptime:latest
+# docker pull ghcr.io/vrepsaj/quptime:latest
 ```
 
 See [docs/deployment/docker.md](docs/deployment/docker.md) for compose

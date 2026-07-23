@@ -9,11 +9,11 @@ import (
 	"errors"
 	"time"
 
-	"git.cer.sh/axodouble/quptime/internal/checks"
-	"git.cer.sh/axodouble/quptime/internal/config"
-	"git.cer.sh/axodouble/quptime/internal/crypto"
-	"git.cer.sh/axodouble/quptime/internal/transport"
-	"git.cer.sh/axodouble/quptime/internal/trust"
+	"git.jas.pe/vrepsaj/quptime/internal/checks"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/crypto"
+	"git.jas.pe/vrepsaj/quptime/internal/transport"
+	"git.jas.pe/vrepsaj/quptime/internal/trust"
 )
 
 // registerHandlers wires every inter-node RPC method that the daemon

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
 )
 
 // defaultTLSWarnDays is how close to expiry a cert can be before the

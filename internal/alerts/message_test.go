@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"git.cer.sh/axodouble/quptime/internal/checks"
-	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/checks"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
 )
 
 func TestRenderDownTransition(t *testing.T) {
@@ -187,9 +187,9 @@ func TestRenderPerTypeOptionalFieldsOmitted(t *testing.T) {
 
 func TestDefaultTemplateAccessor(t *testing.T) {
 	cases := []struct {
-		t            config.CheckType
-		wantSubject  string
-		wantBody     string
+		t           config.CheckType
+		wantSubject string
+		wantBody    string
 	}{
 		{config.CheckHTTP, DefaultSubjectHTTP, DefaultBodyHTTP},
 		{config.CheckTLS, DefaultSubjectTLS, DefaultBodyTLS},

@@ -7,7 +7,7 @@ import (
 
 	probing "github.com/prometheus-community/pro-bing"
 
-	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
 )
 
 type icmpProber struct{}

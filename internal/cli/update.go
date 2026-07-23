@@ -31,15 +31,15 @@ type releaseSource struct {
 var updateSources = []releaseSource{
 	{
 		name:        "gitea",
-		apiLatest:   "https://git.cer.sh/api/v1/repos/axodouble/quptime/releases/latest",
-		apiBeta:     "https://git.cer.sh/api/v1/repos/axodouble/quptime/releases", // first object is the actual latest, which may be a pre-release
-		releaseBase: "https://git.cer.sh/axodouble/quptime/releases/download",
+		apiLatest:   "https://git.jas.pe/api/v1/repos/vrepsaj/quptime/releases/latest",
+		apiBeta:     "https://git.jas.pe/api/v1/repos/vrepsaj/quptime/releases", // first object is the actual latest, which may be a pre-release
+		releaseBase: "https://git.jas.pe/vrepsaj/quptime/releases/download",
 	},
 	{
 		name:        "github",
-		apiLatest:   "https://api.github.com/repos/Axodouble/QUptime/releases/latest",
-		apiBeta:     "https://api.github.com/repos/Axodouble/QUptime/releases", // first object is the actual latest, which may be a pre-release
-		releaseBase: "https://github.com/Axodouble/QUptime/releases/download",
+		apiLatest:   "https://api.github.com/repos/vrepsaj/QUptime/releases/latest",
+		apiBeta:     "https://api.github.com/repos/vrepsaj/QUptime/releases", // first object is the actual latest, which may be a pre-release
+		releaseBase: "https://github.com/vrepsaj/QUptime/releases/download",
 	},
 }
 

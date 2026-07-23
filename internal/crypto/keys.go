@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"os"
 
-	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
 )
 
 // KeySize is the RSA modulus size used by qu.

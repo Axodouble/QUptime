@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"os"
 
-	"git.cer.sh/axodouble/quptime/internal/cli"
+	"git.jas.pe/vrepsaj/quptime/internal/cli"
 )
 
 // version is stamped at link time via `-ldflags "-X main.version=..."`.

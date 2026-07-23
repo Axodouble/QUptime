@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
 )
 
 // tlsServer spins up a localhost TLS listener whose leaf cert has the

@@ -24,8 +24,8 @@ import (
 	"strings"
 	"time"
 
-	"git.cer.sh/axodouble/quptime/internal/config"
-	"git.cer.sh/axodouble/quptime/internal/transport"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/transport"
 )
 
 // MasterView is the minimum the replicator needs from the quorum

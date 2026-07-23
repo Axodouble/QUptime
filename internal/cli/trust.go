@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"git.cer.sh/axodouble/quptime/internal/daemon"
-	"git.cer.sh/axodouble/quptime/internal/trust"
+	"git.jas.pe/vrepsaj/quptime/internal/daemon"
+	"git.jas.pe/vrepsaj/quptime/internal/trust"
 )
 
 func addTrustCmd(root *cobra.Command) {

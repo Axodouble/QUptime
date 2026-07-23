@@ -6,8 +6,8 @@ import (
 	"sync"
 	"testing"
 
-	"git.cer.sh/axodouble/quptime/internal/config"
-	"git.cer.sh/axodouble/quptime/internal/transport"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/transport"
 )
 
 type fakeMaster struct {

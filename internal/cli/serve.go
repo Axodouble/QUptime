@@ -12,8 +12,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"git.cer.sh/axodouble/quptime/internal/config"
-	"git.cer.sh/axodouble/quptime/internal/daemon"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/daemon"
 )
 
 func addServeCmd(root *cobra.Command) {

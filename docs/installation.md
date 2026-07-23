@@ -15,10 +15,10 @@ serves the same artefact set. Gitea is the canonical home; GitHub is a
 push-mirror.
 
 Primary — Gitea releases:
-<https://git.cer.sh/axodouble/quptime/releases>
+<https://git.jas.pe/vrepsaj/quptime/releases>
 
 Fallback — GitHub releases (mirrored from the same tag):
-<https://github.com/Axodouble/QUptime/releases>
+<https://github.com/vrepsaj/QUptime/releases>
 
 Each release ships `qu-${TAG}-linux-amd64`, `qu-${TAG}-linux-arm64`,
 and a `SHA256SUMS` file.
@@ -30,13 +30,13 @@ ARCH=amd64   # or arm64
 
 # Primary: Gitea
 curl -fSL -o qu \
-  "https://git.cer.sh/axodouble/quptime/releases/download/${TAG}/qu-${TAG}-linux-${ARCH}"
+  "https://git.jas.pe/vrepsaj/quptime/releases/download/${TAG}/qu-${TAG}-linux-${ARCH}"
 curl -fSL -o SHA256SUMS \
-  "https://git.cer.sh/axodouble/quptime/releases/download/${TAG}/SHA256SUMS"
+  "https://git.jas.pe/vrepsaj/quptime/releases/download/${TAG}/SHA256SUMS"
 
 # (or the GitHub mirror — substitute the host below if Gitea is unreachable)
-#   https://github.com/Axodouble/QUptime/releases/download/${TAG}/qu-${TAG}-linux-${ARCH}
-#   https://github.com/Axodouble/QUptime/releases/download/${TAG}/SHA256SUMS
+#   https://github.com/vrepsaj/QUptime/releases/download/${TAG}/qu-${TAG}-linux-${ARCH}
+#   https://github.com/vrepsaj/QUptime/releases/download/${TAG}/SHA256SUMS
 
 # Verify before installing. Use the SHA256SUMS from the SAME source
 # as the binary — never mix.
@@ -53,9 +53,9 @@ under `sudo` so it can write to `/usr/local/bin` and
 `/etc/systemd/system`.
 
 ```sh
-curl -fsSL https://git.cer.sh/Axodouble/QUptime/raw/branch/master/install.sh | sudo bash
+curl -fsSL https://git.jas.pe/vrepsaj/QUptime/raw/branch/master/install.sh | sudo bash
 # or, via the GitHub mirror:
-# curl -fsSL https://raw.githubusercontent.com/Axodouble/QUptime/master/install.sh | sudo bash
+# curl -fsSL https://raw.githubusercontent.com/vrepsaj/QUptime/master/install.sh | sudo bash
 ```
 
 What it does:
@@ -86,8 +86,8 @@ Requires Go 1.26.3 or newer.
 
 ```sh
 # Either remote — Gitea is canonical, GitHub is a push-mirror.
-git clone https://git.cer.sh/axodouble/quptime.git
-# git clone https://github.com/Axodouble/QUptime.git
+git clone https://git.jas.pe/vrepsaj/quptime.git
+# git clone https://github.com/vrepsaj/QUptime.git
 cd quptime
 go build -ldflags "-X main.version=$(git describe --tags --always)" -o qu ./cmd/qu
 
@@ -110,17 +110,17 @@ and also gets canary `:master` builds; GHCR is a tag-only mirror.
 Primary — Gitea registry:
 
 ```
-git.cer.sh/axodouble/quptime:master   # tip of main (canary)
-git.cer.sh/axodouble/quptime:latest   # latest tagged release
-git.cer.sh/axodouble/quptime:v0.0.1   # pinned release
+git.jas.pe/vrepsaj/quptime:master   # tip of main (canary)
+git.jas.pe/vrepsaj/quptime:latest   # latest tagged release
+git.jas.pe/vrepsaj/quptime:v0.0.1   # pinned release
 ```
 
 Fallback — GitHub Container Registry:
 
 ```
-ghcr.io/axodouble/quptime:latest      # latest tagged release
-ghcr.io/axodouble/quptime:v0.0.1      # pinned release
-ghcr.io/axodouble/quptime:0.0         # latest 0.0.x
+ghcr.io/vrepsaj/quptime:latest      # latest tagged release
+ghcr.io/vrepsaj/quptime:v0.0.1      # pinned release
+ghcr.io/vrepsaj/quptime:0.0         # latest 0.0.x
 ```
 
 See the [Docker deployment guide](deployment/docker.md) for compose

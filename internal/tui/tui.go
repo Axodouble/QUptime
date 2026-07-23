@@ -14,9 +14,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"git.cer.sh/axodouble/quptime/internal/config"
-	"git.cer.sh/axodouble/quptime/internal/daemon"
-	"git.cer.sh/axodouble/quptime/internal/transport"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/daemon"
+	"git.jas.pe/vrepsaj/quptime/internal/transport"
 )
 
 const refreshInterval = 2 * time.Second
@@ -54,9 +54,9 @@ type model struct {
 	checksFull []config.Check
 	alerts     []config.Alert
 
-	active tabIndex
-	peers  *peersTab
-	checks *checksTab
+	active  tabIndex
+	peers   *peersTab
+	checks  *checksTab
 	alertsT *alertsTab
 
 	modal modal
@@ -815,4 +815,3 @@ func shortID(id string) string {
 	}
 	return id[:8]
 }
-

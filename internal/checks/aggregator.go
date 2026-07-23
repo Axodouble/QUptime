@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
 )
 
 // State is the aggregate verdict on one check.
@@ -29,9 +29,9 @@ type TransitionFn func(check *config.Check, from, to State, snap Snapshot)
 type Snapshot struct {
 	CheckID  string
 	State    State
-	Reports  int   // number of fresh per-node results
-	OKCount  int   // number reporting OK
-	NotOK    int   // number reporting not-OK
+	Reports  int // number of fresh per-node results
+	OKCount  int // number reporting OK
+	NotOK    int // number reporting not-OK
 	Detail   string
 	UpdateAt time.Time
 }

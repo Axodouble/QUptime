@@ -24,8 +24,8 @@ import (
 	"sync"
 	"time"
 
-	"git.cer.sh/axodouble/quptime/internal/config"
-	"git.cer.sh/axodouble/quptime/internal/transport"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/transport"
 )
 
 // Defaults for the heartbeat loop. The dead-after is comfortably

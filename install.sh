@@ -7,8 +7,8 @@
 # documented in docs/deployment/systemd.md.
 #
 # Release sources, tried in order:
-#   1. Gitea:    git.cer.sh/axodouble/quptime/releases   (primary — canonical home)
-#   2. GitHub:   github.com/Axodouble/QUptime/releases   (push-mirror fallback)
+#   1. Gitea:    git.jas.pe/vrepsaj/quptime/releases   (primary — canonical home)
+#   2. GitHub:   github.com/vrepsaj/QUptime/releases   (push-mirror fallback)
 #
 # Idempotent — re-running upgrades the binary and refreshes the unit
 # without touching the data directory.
@@ -26,8 +26,8 @@ DATA_DIR="/etc/quptime"
 # The asset URL is concatenated with `/<tag>/<filename>`. Adjust here
 # if the project moves hosts.
 SOURCES=(
-    "gitea|https://git.cer.sh/api/v1/repos/axodouble/quptime/releases/latest|https://git.cer.sh/axodouble/quptime/releases/download"
-    "github|https://api.github.com/repos/Axodouble/QUptime/releases/latest|https://github.com/Axodouble/QUptime/releases/download"
+    "gitea|https://git.jas.pe/api/v1/repos/vrepsaj/quptime/releases/latest|https://git.jas.pe/vrepsaj/quptime/releases/download"
+    "github|https://api.github.com/repos/vrepsaj/QUptime/releases/latest|https://github.com/vrepsaj/QUptime/releases/download"
 )
 
 fail() {
@@ -140,7 +140,7 @@ for source_spec in "${SOURCES[@]}"; do
 done
 
 if [ -z "$INSTALLED_FROM" ]; then
-    fail "no release source reachable — tried: $(printf '%s ' "${SOURCES[@]%%|*}"). Check network access to git.cer.sh and github.com."
+    fail "no release source reachable — tried: $(printf '%s ' "${SOURCES[@]%%|*}"). Check network access to git.jas.pe and github.com."
 fi
 
 install -m 0755 "$INSTALLED_TMP/$BINARY_NAME" "$INSTALL_BIN"
@@ -246,7 +246,7 @@ echo "> writing $SERVICE_FILE"
 cat > "$SERVICE_FILE" <<'EOF'
 [Unit]
 Description=QUptime distributed uptime monitor
-Documentation=https://git.cer.sh/axodouble/quptime
+Documentation=https://git.jas.pe/vrepsaj/quptime
 Wants=network-online.target
 After=network-online.target
 
@@ -347,5 +347,5 @@ Next steps:
      the ${SERVICE_USER} GID, or grant CAP_NET_RAW in the unit. See
      docs/deployment/systemd.md for the recipes.
 
-Full documentation: https://git.cer.sh/axodouble/quptime/src/branch/master/docs
+Full documentation: https://git.jas.pe/vrepsaj/quptime/src/branch/master/docs
 EOF

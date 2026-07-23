@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 
-	"git.cer.sh/axodouble/quptime/internal/trust"
+	"git.jas.pe/vrepsaj/quptime/internal/trust"
 )
 
 // MinTLS is the minimum protocol version both sides require.

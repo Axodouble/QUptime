@@ -71,7 +71,7 @@ Drop this in `/etc/systemd/system/quptime.service`:
 ```ini
 [Unit]
 Description=QUptime distributed uptime monitor
-Documentation=https://git.cer.sh/axodouble/quptime
+Documentation=https://git.jas.pe/vrepsaj/quptime
 Wants=network-online.target
 After=network-online.target
 

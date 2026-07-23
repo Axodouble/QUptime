@@ -17,7 +17,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
 )
 
 // Method names. Defined here so every package agrees on the wire-level

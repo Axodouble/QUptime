@@ -10,22 +10,22 @@ import (
 	"text/template"
 	"time"
 
-	"git.cer.sh/axodouble/quptime/internal/checks"
-	"git.cer.sh/axodouble/quptime/internal/config"
+	"git.jas.pe/vrepsaj/quptime/internal/checks"
+	"git.jas.pe/vrepsaj/quptime/internal/config"
 )
 
 // TemplateContext is what user-provided subject/body templates see. It
 // is also the shape the default renderer fills in, so changing one
 // place keeps the two paths consistent.
 type TemplateContext struct {
-	Check    *config.Check
-	From     string          // previous state name
-	To       string          // new state name
-	Verb     string          // "UP" | "DOWN" | "RECOVERED"
-	VerbLower string         // lowercase form of Verb ("up" | "down" | "recovered")
-	Snapshot checks.Snapshot // aggregate counts and detail
-	NodeID   string          // master that rendered the message
-	When     string          // RFC3339 timestamp
+	Check     *config.Check
+	From      string          // previous state name
+	To        string          // new state name
+	Verb      string          // "UP" | "DOWN" | "RECOVERED"
+	VerbLower string          // lowercase form of Verb ("up" | "down" | "recovered")
+	Snapshot  checks.Snapshot // aggregate counts and detail
+	NodeID    string          // master that rendered the message
+	When      string          // RFC3339 timestamp
 }
 
 // Message is the rendered notification ready to ship across any
